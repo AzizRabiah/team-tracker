@@ -695,8 +695,12 @@ function authShell(title, sub) {
 }
 const showLogin = (msg) => showAuth('in', msg);
 function showAuth(mode, msg, info) {
-  const T = { in: ['Sign in', 'Sign in'], up: ['Create account', 'Create account'] }[mode];
-  authShell(T[0], mode === 'up' ? 'An admin approves new accounts before they can see the tracker.' : '');
+  const T = {
+    in: ['Sign in', 'Sign in'], up: ['Create account', 'Create account'],
+    forgot: ['Reset password', 'Send link'], reset: ['New password', 'Save password'],
+  }[mode];
+  authShell(T[0], mode === 'up' ? 'An admin approves new accounts before they can see the tracker.'
+    : mode === 'forgot' ? 'We email you a link to choose a new password.' : '');
   const email = h('input', { type: 'email', name: 'email', autocomplete: 'username', required: true, dir: 'ltr' });
   const pw = h('input', { type: 'password', name: 'password', autocomplete: mode === 'in' ? 'current-password' : 'new-password',
     required: true, minlength: mode === 'in' ? null : '8', dir: 'ltr' });
@@ -716,21 +720,28 @@ function showAuth(mode, msg, info) {
         const j = await authReq('signup' + backHere(), 'POST', { email: em, password: pw.value });
         if (j.access_token) { takeSession(j); await enter(); }
         else showAuth('in', '', 'Check your email and click the link to confirm it. Then sign in.');
+      } else if (mode === 'forgot') {
+        await authReq('recover' + backHere(), 'POST', { email: em });
+        showAuth('in', '', 'If this email has an account, a link is on its way.');
+      } else {
+        await authReq('user', 'PUT', { password: pw.value }, cloud.session && cloud.session.access_token);
+        await enter();
       }
     } catch (x) {
       err.textContent = x.message;
       go.disabled = false;
-      pw.value = '';
-      pw.focus();
+      if (mode !== 'forgot') { pw.value = ''; pw.focus(); }
     }
   } },
-  fld('Email', email),
-  fld('Password', pw),
-  mode === 'up' ? h('p', { class: 'hint-s', text: 'At least 8 characters. You can change it later from Settings.' }) : null,
-  h('div', { class: 'login-f' }, go, mode === 'in' ? to('Create account', 'up') : to('Back to sign in', 'in')),
+  mode === 'reset' ? null : fld('Email', email),
+  mode === 'forgot' ? null : fld(mode === 'reset' ? 'New password' : 'Password', pw),
+  mode === 'up' || mode === 'reset' ? h('p', { class: 'hint-s', text: 'At least 8 characters.' }) : null,
+  h('div', { class: 'login-f' }, go,
+    mode === 'in' ? to('Create account', 'up') : to('Back to sign in', 'in'),
+    mode === 'in' ? to('Forgot password', 'forgot') : null),
   ok, err);
   $('#page').replaceChildren(h('section', { class: 'panel login-p' }, form));
-  email.focus();
+  (mode === 'reset' ? pw : email).focus();
 }
 function showPending(email) {
   authShell('Waiting for approval', '');
@@ -1317,11 +1328,10 @@ function openItem(id, wsId) {
   dlg.replaceChildren(h('form', { class: 'dlg', method: 'dialog', onsubmit: (e) => { e.preventDefault(); save(); } },
     h('div', { class: 'dlg-h' }, h('h2', { text: prev ? 'Edit topic' : 'New topic' })),
     h('div', { class: 'dlg-b' },
-      fld('Workstream', c.ws), fld('Status', c.status),
-      fld('Action required', c.nextStep),
+      fld('Topic', c.title), fld('Workstream', c.ws), fld('Status', c.status),
       fld('Where we are (latest update)', c.update),
+      fld('Action required', c.nextStep),
       fld('Challenge or blocker', c.challenge),
-      fld('Topic title (optional)', c.title),
       state.config.fields.map((f) => fld(f.name, c.custom[f.id])),
       h('label', { class: 'chk' }, c.decNeeded, h('span', { text: 'Needs a decision' })),
       decBox,
@@ -1334,7 +1344,7 @@ function openItem(id, wsId) {
 
     footer));
   dlg.showModal();
-  c.nextStep.focus();
+  c.title.focus();
 }
 
 /* =====================================================================
@@ -1576,6 +1586,7 @@ async function init() {
     const hs = takeHash();
     try {
       if (hs && hs.error) showLogin(hs.error);
+      else if (hs && hs.type === 'recovery') showAuth('reset');
       else if (cloud.session) await enter();
       else showLogin();
     } catch (e) { showLogin(e.message); }
