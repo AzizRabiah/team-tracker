@@ -489,7 +489,7 @@ function authMsg(j) {
   if (c === 'invalid_credentials') return 'Wrong email or password.';
   if (c === 'signup_disabled') return 'Sign up is closed.';
   if (c === 'user_already_exists') return 'This email already has an account. Use Sign in.';
-  if (c === 'weak_password') return 'Choose a stronger password, at least 6 characters.';
+  if (c === 'weak_password') return 'Choose a stronger password, at least 8 characters.';
   if (c === 'email_not_confirmed') return 'Confirm your email first. Check your inbox.';
   if (c === 'same_password') return 'Choose a different password.';
   if (/rate_limit/.test(c)) return 'Too many tries. Wait a few minutes and try again.';
@@ -699,7 +699,7 @@ function showAuth(mode, msg, info) {
   authShell(T[0], mode === 'up' ? 'An admin approves new accounts before they can see the tracker.' : '');
   const email = h('input', { type: 'email', name: 'email', autocomplete: 'username', required: true, dir: 'ltr' });
   const pw = h('input', { type: 'password', name: 'password', autocomplete: mode === 'in' ? 'current-password' : 'new-password',
-    required: true, minlength: mode === 'in' ? null : '6', dir: 'ltr' });
+    required: true, minlength: mode === 'in' ? null : '8', dir: 'ltr' });
   const err = h('div', { class: 'err', role: 'alert', text: msg || '' });
   const ok = h('div', { class: 'ok', role: 'status', text: info || '' });
   const go = btn(T[1], null, 'primary', { type: 'submit' });
@@ -726,7 +726,7 @@ function showAuth(mode, msg, info) {
   } },
   fld('Email', email),
   fld('Password', pw),
-  mode === 'up' ? h('p', { class: 'hint-s', text: 'At least 6 characters. You can change it later in Settings.' }) : null,
+  mode === 'up' ? h('p', { class: 'hint-s', text: 'At least 8 characters. You can change it later in Settings.' }) : null,
   h('div', { class: 'login-f' }, go, mode === 'in' ? to('Create account', 'up') : to('Back to sign in', 'in')),
   ok, err);
   $('#page').replaceChildren(h('section', { class: 'panel login-p' }, form));
@@ -1391,10 +1391,8 @@ function openSettings() {
     sec.push(h('h3', { text: 'General' }),
       fld('Page title', bind(txt(draft.title), 'title', draft)),
       fld('Subtitle', bind(txt(draft.subtitle), 'subtitle', draft)),
-      fld('Header name (shown when there is no logo)', bind(txt(draft.brand), 'brand', draft)),
-      fld('Header second line', bind(txt(draft.brandSub), 'brandSub', draft)),
-      h('div', { class: 'fld' }, h('span', { text: 'Logo (shown on the purple header, kept inside the data file)' }), logoIn,
-        draft.logo ? h('div', {}, h('div', { class: 'logo-prev' }, h('img', { src: draft.logo, alt: '' })), ' ', btn('Remove logo', () => { draft.logo = ''; build(); }, 'small')) : null));
+      fld('Header name', bind(txt(draft.brand), 'brand', draft)),
+      fld('Header second line', bind(txt(draft.brandSub), 'brandSub', draft)));
 
     sec.push(h('h3', { text: 'Workstreams' }),
       h('p', { class: 'hint-s', text: 'Workstreams with the same group name appear together under one heading (like Group 1). Leave the group empty for a standalone workstream.' }),
@@ -1462,12 +1460,12 @@ function openSettings() {
       h('div', { style: 'margin-top:10px' }, btn('Add field', () => { draft.fields.push({ id: uid(), name: '', type: 'text', options: [] }); build(); }, 'small')));
 
     if (CLOUD) {
-      const npw = h('input', { type: 'password', autocomplete: 'new-password', minlength: '6', dir: 'ltr', placeholder: 'New password, at least 6 characters' });
+      const npw = h('input', { type: 'password', autocomplete: 'new-password', minlength: '8', dir: 'ltr', placeholder: 'New password, at least 8 characters' });
       const msg = h('div', { class: 'hint-s', role: 'status' });
       sec.push(h('h3', { text: 'My account' }),
         h('p', { class: 'hint-s', text: 'Signed in as ' + (cloud.me ? cloud.me.email : '') + '.' }),
         h('div', { class: 'cols' }, npw, btn('Change password', async () => {
-          if (npw.value.length < 6) { msg.textContent = 'Use at least 6 characters.'; return; }
+          if (npw.value.length < 8) { msg.textContent = 'Use at least 8 characters.'; return; }
           try {
             await authReq('user', 'PUT', { password: npw.value }, cloud.session && cloud.session.access_token);
             npw.value = '';
