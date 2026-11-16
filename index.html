@@ -1893,9 +1893,6 @@ function openSettings() {
     const top = body.scrollTop;
     const sec = [];
 
-    const logoIn = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/svg+xml,image/webp' });
-    logoIn.addEventListener('change', () => readLogo(logoIn.files && logoIn.files[0], (v) => { err.textContent = ''; draft.logo = v; build(); }));
-
     sec.push(h('h3', { text: 'General' }),
       fld('Page title', bind(txt(draft.title), 'title', draft)),
       fld('Subtitle', bind(txt(draft.subtitle), 'subtitle', draft)),
