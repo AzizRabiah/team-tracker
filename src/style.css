@@ -420,7 +420,6 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 .part { margin-bottom: -6px; }
 .rm-l, .brow .nm { overflow-wrap: normal; }
 
-.group:has(.gt) .ws { margin-inline-start: 20px; }
 .group .gt h2 { font-size: 19px; color: var(--purple); }
 .group:has(.gt) { margin-top: 8px; }
 
