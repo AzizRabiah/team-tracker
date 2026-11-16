@@ -1,0 +1,4 @@
+-- Self sign-up with admin approval (applied after schema.sql).
+-- members: one row per auth user, created by trigger, approved=false until an admin approves.
+-- is_member() / is_admin() gate every policy on config and topics.
+-- See the applied migration "members_and_approval" in the Supabase project for the full text.

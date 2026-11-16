@@ -475,3 +475,8 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 }
 .login-f { margin-top: 20px; }
 .banner.warn { background: #fff4d6; }
+.ok { color: #007a55; font-weight: 700; margin: 12px 0 0; }
+.login-f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.pend { margin: 16px 0 0; line-height: 1.6; }
+.prow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.prow .em { flex: 1; overflow-wrap: anywhere; }

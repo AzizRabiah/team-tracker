@@ -483,6 +483,11 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 }
 .login-f { margin-top: 20px; }
 .banner.warn { background: #fff4d6; }
+.ok { color: #007a55; font-weight: 700; margin: 12px 0 0; }
+.login-f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.pend { margin: 16px 0 0; line-height: 1.6; }
+.prow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.prow .em { flex: 1; overflow-wrap: anywhere; }
 
 </style>
 </head>
@@ -954,7 +959,7 @@ async function loadHandle() {
    if the revision is still the one this page loaded, so two people editing
    the same topic cannot silently overwrite each other.
    ===================================================================== */
-const cloud = { session: null, base: null, revs: new Map(), cfgRev: 0, sig: '', timer: null, queue: Promise.resolve(), stale: false, poll: null };
+const cloud = { me: null, pending: 0, session: null, base: null, revs: new Map(), cfgRev: 0, sig: '', timer: null, queue: Promise.resolve(), stale: false, poll: null };
 
 function loadSession() {
   try {
@@ -982,10 +987,42 @@ async function authCall(grant, body) {
   const j = await r.json().catch(() => ({}));
   return { ok: r.ok, j };
 }
+function authMsg(j) {
+  const c = j.error_code || '';
+  if (c === 'invalid_credentials') return 'Wrong email or password.';
+  if (c === 'signup_disabled') return 'Sign up is closed.';
+  if (c === 'user_already_exists') return 'This email already has an account. Use Sign in.';
+  if (c === 'weak_password') return 'Choose a stronger password, at least 8 characters.';
+  if (c === 'email_not_confirmed') return 'Confirm your email first. Check your inbox.';
+  if (c === 'same_password') return 'Choose a different password.';
+  if (/rate_limit/.test(c)) return 'Too many tries. Wait a few minutes and try again.';
+  return j.msg || j.error_description || 'Something went wrong.';
+}
+async function authReq(path, method, body, token) {
+  const hd = { apikey: CLOUD.key, 'Content-Type': 'application/json' };
+  if (token) hd.Authorization = 'Bearer ' + token;
+  let r;
+  try { r = await fetch(CLOUD.url + '/auth/v1/' + path, { method, headers: hd, body: JSON.stringify(body) }); } catch (e) { throw new Error('No connection.'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(authMsg(j));
+  return j;
+}
+const backHere = () => '?redirect_to=' + encodeURIComponent(location.origin + location.pathname);
+function jwtSub(t) {
+  try { return JSON.parse(atob(str(t).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || ''; } catch (e) { return ''; }
+}
 async function signIn(email, password) {
-  const { ok, j } = await authCall('password', { email, password });
-  if (!ok) throw new Error(j.error_code === 'invalid_credentials' ? 'Wrong email or password.' : (j.msg || j.error_description || 'Could not sign in.'));
+  const j = await authReq('token?grant_type=password', 'POST', { email, password });
   takeSession(j);
+}
+// Links in confirmation and reset emails come back to this page with the session in the address.
+function takeHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (!p.get('access_token') && !p.get('error_description')) return null;
+  history.replaceState(null, '', location.pathname + location.search);
+  if (p.get('error_description')) return { error: 'This link is not valid any more. Ask for a new one.' };
+  takeSession({ access_token: p.get('access_token'), refresh_token: p.get('refresh_token'), expires_in: Number(p.get('expires_in')) || 3600 });
+  return { type: p.get('type') };
 }
 let refreshing = null;
 function refreshSession() {
@@ -1133,6 +1170,7 @@ async function pollOnce() {
   const a = document.activeElement;
   if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
   try {
+    refreshPending().catch(() => {});
     const [c, t] = await Promise.all([api('config?select=rev&id=eq.1'), api('topics?select=id,rev&order=created_at.asc,id.asc')]);
     if (!c || !c[0] || sigOf(c[0].rev, t || []) === cloud.sig) return;
     const rem = await fetchRemote();
@@ -1149,35 +1187,90 @@ function startPoll() {
   cloud.poll = setInterval(pollOnce, POLL_MS);
 }
 
-function showLogin(msg) {
+function authShell(title, sub) {
   clearInterval(cloud.poll);
   clearTimeout(cloud.timer);
   ui.edit = false;
-  document.title = 'Sign in';
+  document.title = title;
   $('#editbar').replaceChildren();
   $('#banners').replaceChildren();
-  $('#top').replaceChildren(h('div', { class: 'top-in' }, h('h1', { text: 'Sign in' }), h('p', { class: 'sub', text: 'Use the email and password you were given.' })));
+  $('#top').replaceChildren(h('div', { class: 'top-in' }, h('h1', { text: title }), sub ? h('p', { class: 'sub', text: sub }) : null));
+}
+const showLogin = (msg) => showAuth('in', msg);
+function showAuth(mode, msg, info) {
+  const T = {
+    in: ['Sign in', 'Sign in'], up: ['Create account', 'Create account'],
+    forgot: ['Reset password', 'Send link'], reset: ['New password', 'Save password'],
+  }[mode];
+  authShell(T[0], mode === 'up' ? 'An admin approves new accounts before they can see the tracker.'
+    : mode === 'forgot' ? 'We email you a link to choose a new password.' : '');
   const email = h('input', { type: 'email', name: 'email', autocomplete: 'username', required: true, dir: 'ltr' });
-  const pw = h('input', { type: 'password', name: 'password', autocomplete: 'current-password', required: true, dir: 'ltr' });
+  const pw = h('input', { type: 'password', name: 'password', autocomplete: mode === 'in' ? 'current-password' : 'new-password',
+    required: true, minlength: mode === 'in' ? null : '8', dir: 'ltr' });
   const err = h('div', { class: 'err', role: 'alert', text: msg || '' });
-  const go = btn('Sign in', null, 'primary', { type: 'submit' });
+  const ok = h('div', { class: 'ok', role: 'status', text: info || '' });
+  const go = btn(T[1], null, 'primary', { type: 'submit' });
+  const to = (label, m) => btn(label, () => showAuth(m), 'small link');
   const form = h('form', { class: 'login', onsubmit: async (e) => {
     e.preventDefault();
     go.disabled = true;
     err.textContent = '';
-    try { await signIn(email.value.trim(), pw.value); await enter(); } catch (x) {
+    ok.textContent = '';
+    try {
+      const em = email.value.trim();
+      if (mode === 'in') { await signIn(em, pw.value); await enter(); }
+      else if (mode === 'up') {
+        const j = await authReq('signup' + backHere(), 'POST', { email: em, password: pw.value });
+        if (j.access_token) { takeSession(j); await enter(); }
+        else showAuth('in', '', 'Check your email and click the link to confirm it. Then sign in.');
+      } else if (mode === 'forgot') {
+        await authReq('recover' + backHere(), 'POST', { email: em });
+        showAuth('in', '', 'If this email has an account, a link is on its way.');
+      } else {
+        await authReq('user', 'PUT', { password: pw.value }, cloud.session && cloud.session.access_token);
+        await enter();
+      }
+    } catch (x) {
       err.textContent = x.message;
       go.disabled = false;
-      pw.value = '';
-      pw.focus();
+      if (mode !== 'forgot') { pw.value = ''; pw.focus(); }
     }
-  } }, fld('Email', email), fld('Password', pw), h('div', { class: 'login-f' }, go), err);
+  } },
+  mode === 'reset' ? null : fld('Email', email),
+  mode === 'forgot' ? null : fld(mode === 'reset' ? 'New password' : 'Password', pw),
+  mode === 'up' || mode === 'reset' ? h('p', { class: 'hint-s', text: 'At least 8 characters.' }) : null,
+  h('div', { class: 'login-f' }, go,
+    mode === 'in' ? to('Create account', 'up') : to('Back to sign in', 'in'),
+    mode === 'in' ? to('Forgot password', 'forgot') : null),
+  ok, err);
   $('#page').replaceChildren(h('section', { class: 'panel login-p' }, form));
-  email.focus();
+  (mode === 'reset' ? pw : email).focus();
+}
+function showPending(email) {
+  authShell('Waiting for approval', '');
+  $('#page').replaceChildren(h('section', { class: 'panel login-p' },
+    h('p', { class: 'pend', text: 'Your account is ready' + (email ? ' (' + email + ')' : '') + '. An admin has to approve it before you can see the tracker.' }),
+    h('div', { class: 'login-f' },
+      btn('Check again', async () => { try { await enter(); } catch (e) { toast(e.message); } }, 'primary'),
+      btn('Sign out', signOut, 'small link'))));
+}
+async function fetchMe() {
+  const rows = await api('members?select=user_id,email,approved,is_admin&user_id=eq.' + encodeURIComponent(jwtSub(cloud.session && cloud.session.access_token)));
+  return rows && rows[0] || null;
+}
+async function refreshPending() {
+  if (!cloud.me || !cloud.me.is_admin) { cloud.pending = 0; return; }
+  const rows = await api('members?select=user_id&approved=eq.false');
+  const n = rows ? rows.length : 0;
+  if (n !== cloud.pending) { cloud.pending = n; renderBanners(); }
 }
 async function enter() {
   try {
+    cloud.me = await fetchMe();
+    if (!cloud.me || !cloud.me.approved) { showPending(cloud.me && cloud.me.email); return; }
     applyRemote(await fetchRemote());
+    cloud.pending = 0;
+    await refreshPending().catch(() => {});
   } catch (e) {
     if (e.auth) { showLogin('Your session ended. Sign in again.'); return; }
     throw new Error('Could not load the tracker: ' + e.message);
@@ -1345,6 +1438,10 @@ function renderEditBar() {
 function renderBanners() {
   const out = [];
   const note = (text, ...acts) => h('div', { class: 'banner warn' }, h('div', { class: 'banner-in' }, h('span', { text }), ...acts));
+  if (CLOUD && cloud.pending) {
+    out.push(note(cloud.pending + (cloud.pending === 1 ? ' person is' : ' people are') + ' waiting for your approval.',
+      btn('Review', openSettings, 'small primary')));
+  }
   if (CLOUD && ui.notice) {
     if (ui.notice.kind === 'conflict') {
       out.push(note('Someone else changed this while you were editing, so your change was not saved. Reload to see their version.',
@@ -1770,6 +1867,31 @@ function openSettings() {
   const iconBtn = (label, text, fn, disabled, tip) => h('button', { class: 'btn small', type: 'button', text, 'aria-label': label, title: tip || label, disabled: disabled ? true : null, onclick: fn });
   const move = (arr, i, dir) => { const j = i + dir; if (j < 0 || j >= arr.length) return; const t = arr[i]; arr[i] = arr[j]; arr[j] = t; build(); };
 
+  const isAdmin = CLOUD && cloud.me && cloud.me.is_admin;
+  const peopleBox = h('div', { class: 'people' });
+  let people = null;
+  const setAccess = async (p) => {
+    try {
+      const rows = await api('members?user_id=eq.' + encodeURIComponent(p.user_id), { method: 'PATCH', prefer: 'return=representation', body: { approved: !p.approved } });
+      if (!rows || !rows.length) throw new Error('Not allowed.');
+      p.approved = !p.approved;
+      renderPeople();
+      refreshPending().catch(() => {});
+    } catch (e) { toast('Could not change access: ' + e.message); }
+  };
+  const personRow = (p) => h('div', { class: 'prow' },
+    h('span', { class: 'em', dir: 'ltr', text: p.email }),
+    h('span', { class: 'hint-s', text: p.approved ? (p.is_admin ? 'Admin' : 'Approved') : 'Waiting' }),
+    p.user_id === cloud.me.user_id ? null
+      : btn(p.approved ? 'Remove access' : 'Approve', () => setAccess(p), 'small' + (p.approved ? '' : ' primary')));
+  const renderPeople = () => {
+    peopleBox.replaceChildren(...(people ? people.map(personRow) : [h('p', { class: 'hint-s', text: 'Loading...' })]));
+  };
+  const loadPeople = async () => {
+    try { people = await api('members?select=user_id,email,approved,is_admin&order=approved.asc,created_at.asc'); } catch (e) { people = []; toast('Could not load people: ' + e.message); }
+    renderPeople();
+  };
+
   function build() {
     const top = body.scrollTop;
     const sec = [];
@@ -1850,6 +1972,12 @@ function openSettings() {
       }),
       h('div', { style: 'margin-top:10px' }, btn('Add field', () => { draft.fields.push({ id: uid(), name: '', type: 'text', options: [] }); build(); }, 'small')));
 
+    if (isAdmin) {
+      sec.push(h('h3', { text: 'People' }),
+        h('p', { class: 'hint-s', text: 'People create their own account on the sign in page. They see nothing until you approve them here.' }),
+        peopleBox);
+    }
+
     sec.push(h('h3', { text: 'Data' }),
       h('p', { class: 'hint-s', text: CLOUD ? 'Changes are saved online as you make them. These actions run immediately and close this window.'
         : 'Your data is saved inside this page when you click Save. These actions run immediately and close this window.' }),
@@ -1891,8 +2019,10 @@ function openSettings() {
     h('div', { class: 'dlg-h' }, h('h2', { text: 'Settings' })),
     body,
     h('div', { class: 'dlg-f' }, btn('Save settings', save, 'primary'), btn('Cancel', () => dlg.close()))));
+  renderPeople();
   build();
   dlg.showModal();
+  if (isAdmin) loadPeople();
 }
 
 function clearAll() {
@@ -1935,8 +2065,12 @@ async function init() {
     state = emptyData();
     bindGlobal();
     loadSession();
+    const hs = takeHash();
     try {
-      if (cloud.session) await enter(); else showLogin();
+      if (hs && hs.error) showLogin(hs.error);
+      else if (hs && hs.type === 'recovery') showAuth('reset');
+      else if (cloud.session) await enter();
+      else showLogin();
     } catch (e) { showLogin(e.message); }
     return;
   }
