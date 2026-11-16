@@ -1,3 +1,4 @@
 dist/
 HANDOFF.md
 src/seed.json
+.claude/

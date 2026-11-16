@@ -86,6 +86,7 @@ function fmtDate(iso) {
   const s = d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()];
   return d.getUTCFullYear() === new Date().getFullYear() ? s : s + ' ' + d.getUTCFullYear();
 }
+const ttl = (it) => it.title || it.nextStep || it.update || it.challenge || 'Untitled';
 const days = (n) => n + (n === 1 ? ' day' : ' days');
 const topics = (n) => n + (n === 1 ? ' topic' : ' topics');
 
@@ -265,7 +266,7 @@ function normalize(raw) {
     return {
       id: str(x.id) || uid(),
       ws: wsId,
-      title: str(x.title) || '(untitled)',
+      title: str(x.title),
       status: stIds.has(x.status) ? x.status : statuses[0].id,
       update: str(x.update), updateDate: parseISO(x.updateDate) != null ? x.updateDate : '',
       nextStep: str(x.nextStep), nextDate: parseISO(x.nextDate) != null ? x.nextDate : '',
@@ -694,12 +695,8 @@ function authShell(title, sub) {
 }
 const showLogin = (msg) => showAuth('in', msg);
 function showAuth(mode, msg, info) {
-  const T = {
-    in: ['Sign in', 'Sign in'], up: ['Create account', 'Create account'],
-    forgot: ['Reset password', 'Send link'], reset: ['New password', 'Save password'],
-  }[mode];
-  authShell(T[0], mode === 'up' ? 'An admin approves new accounts before they can see the tracker.'
-    : mode === 'forgot' ? 'We email you a link to choose a new password.' : '');
+  const T = { in: ['Sign in', 'Sign in'], up: ['Create account', 'Create account'] }[mode];
+  authShell(T[0], mode === 'up' ? 'An admin approves new accounts before they can see the tracker.' : '');
   const email = h('input', { type: 'email', name: 'email', autocomplete: 'username', required: true, dir: 'ltr' });
   const pw = h('input', { type: 'password', name: 'password', autocomplete: mode === 'in' ? 'current-password' : 'new-password',
     required: true, minlength: mode === 'in' ? null : '8', dir: 'ltr' });
@@ -719,28 +716,21 @@ function showAuth(mode, msg, info) {
         const j = await authReq('signup' + backHere(), 'POST', { email: em, password: pw.value });
         if (j.access_token) { takeSession(j); await enter(); }
         else showAuth('in', '', 'Check your email and click the link to confirm it. Then sign in.');
-      } else if (mode === 'forgot') {
-        await authReq('recover' + backHere(), 'POST', { email: em });
-        showAuth('in', '', 'If this email has an account, a link is on its way.');
-      } else {
-        await authReq('user', 'PUT', { password: pw.value }, cloud.session && cloud.session.access_token);
-        await enter();
       }
     } catch (x) {
       err.textContent = x.message;
       go.disabled = false;
-      if (mode !== 'forgot') { pw.value = ''; pw.focus(); }
+      pw.value = '';
+      pw.focus();
     }
   } },
-  mode === 'reset' ? null : fld('Email', email),
-  mode === 'forgot' ? null : fld(mode === 'reset' ? 'New password' : 'Password', pw),
-  mode === 'up' || mode === 'reset' ? h('p', { class: 'hint-s', text: 'At least 8 characters.' }) : null,
-  h('div', { class: 'login-f' }, go,
-    mode === 'in' ? to('Create account', 'up') : to('Back to sign in', 'in'),
-    mode === 'in' ? to('Forgot password', 'forgot') : null),
+  fld('Email', email),
+  fld('Password', pw),
+  mode === 'up' ? h('p', { class: 'hint-s', text: 'At least 8 characters. You can change it later from Settings.' }) : null,
+  h('div', { class: 'login-f' }, go, mode === 'in' ? to('Create account', 'up') : to('Back to sign in', 'in')),
   ok, err);
   $('#page').replaceChildren(h('section', { class: 'panel login-p' }, form));
-  (mode === 'reset' ? pw : email).focus();
+  email.focus();
 }
 function showPending(email) {
   authShell('Waiting for approval', '');
@@ -1038,11 +1028,11 @@ function boardSection() {
     h('h2', { text: 'Where each workstream stands' }),
     box);
 }
-function calendar(dated, ev) {
+function calendar(events) {
   const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const byDay = {};
-  for (const it of dated) (byDay[ev(it).date] = byDay[ev(it).date] || []).push(it);
-  const dates = dated.map((it) => ev(it).date).concat([TODAY]).sort();
+  for (const e of events) (byDay[e.date] = byDay[e.date] || []).push(e);
+  const dates = events.map((e) => e.date).concat([TODAY]).sort();
   const first = dates[0], last = dates[dates.length - 1];
   const wd = (iso) => new Date(parseISO(iso)).getUTCDay();
   let start = addDays(first, -wd(first));
@@ -1054,10 +1044,10 @@ function calendar(dated, ev) {
     const list = byDay[day] || [];
     const label = n === 1 || day === start ? MONTHS[t.getUTCMonth()] + ' ' + n : String(n);
     const cell = h(list.length ? 'button' : 'div', { class: 'cal-c' + (day === TODAY ? ' today' : '') + (list.length ? ' has' : '') + (day < TODAY ? ' past' : ''),
-      type: list.length ? 'button' : null, onclick: list.length ? () => jumpTo(list[0].id) : null,
-      'aria-label': fmtDate(day) + (list.length ? ': ' + list.map((i) => i.title).join(', ') : '') },
+      type: list.length ? 'button' : null, onclick: list.length ? () => jumpTo(list[0].it.id) : null,
+      'aria-label': fmtDate(day) + (list.length ? ': ' + list.map((e) => (e.target ? 'Target: ' : '') + ttl(e.it)).join(', ') : '') },
       h('span', { class: 'cal-n', text: label }),
-      list.length ? h('span', { class: 'cal-dots' }, list.slice(0, 4).map((i) => h('i', { vars: { '--c': statusById(i.status).color } }))) : null);
+      list.length ? h('span', { class: 'cal-dots' }, list.slice(0, 4).map((e) => h('i', { vars: { '--c': statusById(e.it.status).color } }))) : null);
     cells.push(cell);
   }
   return h('div', { class: 'cal' },
@@ -1065,34 +1055,40 @@ function calendar(dated, ev) {
     h('div', { class: 'cal-g' }, cells));
 }
 
+// Each topic can put two dates on the calendar: the action date and the target date.
 function nextSection() {
-  const ev = (it) => (it.nextDate ? { date: it.nextDate, target: false } : it.targetDate ? { date: it.targetDate, target: true } : null);
   const act = state.items.filter(isActive);
-  const dated = act.filter(ev).sort((a, b) => (ev(a).date < ev(b).date ? -1 : ev(a).date > ev(b).date ? 1 : 0));
-  if (!dated.length) return null;
+  const events = [];
+  for (const it of act) {
+    if (it.nextDate) events.push({ it, date: it.nextDate, target: false });
+    if (it.targetDate && it.targetDate !== it.nextDate) events.push({ it, date: it.targetDate, target: true });
+  }
+  events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (!events.length) return null;
   const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const rows = dated.map((it) => {
-    const e = ev(it), st = statusById(it.status), w = wsById(it.ws);
+  const rows = events.map((e) => {
+    const it = e.it, st = statusById(it.status), w = wsById(it.ws);
     const n = diffDays(TODAY, e.date);
     const t = new Date(parseISO(e.date));
     const rel = n < 0 ? 'Overdue ' + days(-n) : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : 'In ' + days(n);
-    const action = it.nextStep || (e.target ? 'Target date' : '');
+    const action = e.target ? 'Target date' : it.nextStep;
     return h('tr', { class: 'at-r' + (n < 0 ? ' late' : ''), vars: { '--c': st.color }, tabindex: '0', onclick: () => jumpTo(it.id),
       onkeydown: (ev2) => { if (ev2.key === 'Enter') jumpTo(it.id); } },
       h('td', { class: 'at-d' }, h('b', { text: t.getUTCDate() + ' ' + MONTHS[t.getUTCMonth()] + (t.getUTCFullYear() !== new Date().getFullYear() ? ' ' + t.getUTCFullYear() : '') }),
         h('span', { text: ' ' + WD[t.getUTCDay()] }), h('em', { text: rel })),
-      h('td', { class: 'at-t' }, h('i', { dir: 'auto', text: w ? (w.group ? w.group + ': ' : '') + w.name : '' }), h('b', { dir: 'auto', text: it.title })),
+      h('td', { class: 'at-t' }, h('i', { dir: 'auto', text: w ? (w.group ? w.group + ': ' : '') + w.name : '' }), it.title ? h('b', { dir: 'auto', text: it.title }) : null),
       h('td', { class: 'at-a', dir: 'auto', text: action }),
       h('td', { class: 'at-s' }, pill(st)),
-      h('td', { class: 'at-x' }, it.decision.needed ? dtag(it, true) : h('span', { class: 'at-none', text: '-' })));
+      h('td', { class: 'at-x' }, it.decision.needed ? dtag(it, true) : h('span', { class: 'at-none', text: '-' })),
+      h('td', { class: 'at-c', dir: 'auto' }, it.challenge ? it.challenge : h('span', { class: 'at-none', text: '-' })));
   });
-  const miss = act.length - dated.length;
+  const miss = act.filter((it) => !it.nextDate && !it.targetDate).length;
   return h('section', { class: 'sec', id: 'next' },
     h('h2', { text: 'Actions required' }),
-    h('div', { class: 'panel cal-p' }, calendar(dated, ev)),
+    h('div', { class: 'panel cal-p' }, calendar(events)),
     h('div', { class: 'panel rm' },
       h('table', { class: 'at' },
-        h('thead', {}, h('tr', {}, ['Date', 'Topic', 'Action required', 'Status', 'Decision from'].map((x) => h('th', { scope: 'col', text: x })))),
+        h('thead', {}, h('tr', {}, ['Date', 'Topic', 'Action required', 'Status', 'Decision from', 'Challenge'].map((x) => h('th', { scope: 'col', text: x })))),
         h('tbody', {}, rows)),
       miss ? h('p', { class: 'chart-note', text: miss + (miss === 1 ? ' topic has' : ' topics have') + ' no date yet, so ' + (miss === 1 ? 'it is' : 'they are') + ' not shown here.' }) : null));
 }
@@ -1113,7 +1109,7 @@ function challengesSection() {
       h('div', { class: 'panel decisions' }, h('ul', { class: 'dec-list' }, dec.map((it) => {
         const w = wsById(it.ws);
         return h('li', {}, icon(it.status), h('div', {},
-          h('div', { class: 'd-title' }, h('a', { href: '#it-' + it.id, dir: 'auto', onclick: jump(it.id), text: it.title })),
+          h('div', { class: 'd-title' }, h('a', { href: '#it-' + it.id, dir: 'auto', onclick: jump(it.id), text: ttl(it) })),
           it.decision.text ? h('div', { class: 'd-text', dir: 'auto', text: it.decision.text }) : null,
           h('div', { class: 'd-meta' }, dtag(it), w ? ' ' + w.name : '')));
       }))));
@@ -1126,7 +1122,7 @@ function challengesSection() {
         const flags = [];
         if (od) flags.push('Overdue by ' + days(od)); else if (targetPassed(it)) flags.push('Past target date');
         return h('li', {}, icon(it.status), h('div', {},
-          h('div', { class: 'd-title' }, h('a', { href: '#it-' + it.id, dir: 'auto', onclick: jump(it.id), text: it.title })),
+          h('div', { class: 'd-title' }, h('a', { href: '#it-' + it.id, dir: 'auto', onclick: jump(it.id), text: ttl(it) })),
           (it.challenge || it.update) ? h('div', { class: 'd-text', dir: 'auto', text: it.challenge || it.update }) : null,
           h('div', { class: 'd-meta', text: [w ? w.name : '', statusById(it.status).label].concat(flags).filter(Boolean).join(', ') })));
       }))));
@@ -1198,7 +1194,7 @@ function itemRow(it) {
   track(d, it.id);
 
   const l1 = h('div', { class: 'it-l1' },
-    h('span', { class: 'it-title', dir: 'auto', text: it.title }),
+    h('span', { class: 'it-title', dir: 'auto', text: ttl(it) }),
     h('span', { style: 'display:inline-flex;gap:8px;align-items:center' }, pill(st),
       ui.edit ? btn('Edit', (e) => { e.preventDefault(); e.stopPropagation(); openItem(it.id); }, 'small edit-only') : null));
   const main = h('div', { class: 'it-main' }, l1);
@@ -1261,7 +1257,7 @@ function openItem(id, wsId) {
   if (!it.ws) it.ws = wsId || state.config.workstreams[0].id;
   if (!it.status) it.status = (state.config.statuses.find((s) => s.kind === 'ontrack') || state.config.statuses[0]).id;
   const c = {};
-  c.title = txt(it.title, 'For example: Sign the commercial agreement');
+  c.title = txt(it.title, 'Optional. For example: Sign the agreement');
   c.ws = select(state.config.workstreams.map((w) => [w.id, (w.group ? w.group + ': ' : '') + w.name]), it.ws);
   c.status = select(state.config.statuses.map((s) => [s.id, s.label]), it.status);
   c.update = area(it.update, 3);
@@ -1290,7 +1286,7 @@ function openItem(id, wsId) {
   showDec();
 
   const save = () => {
-    if (!c.title.value.trim()) { err.textContent = 'Enter a title for the topic.'; c.title.focus(); return; }
+    if (!c.title.value.trim() && !c.nextStep.value.trim() && !c.update.value.trim() && !c.challenge.value.trim()) { err.textContent = 'Fill in at least the action required, or a title.'; c.nextStep.focus(); return; }
     const next = Object.assign({}, it, {
       title: c.title.value.trim(), ws: c.ws.value, status: c.status.value,
       update: c.update.value.trim(), updateDate: c.updateDate.value,
@@ -1321,10 +1317,11 @@ function openItem(id, wsId) {
   dlg.replaceChildren(h('form', { class: 'dlg', method: 'dialog', onsubmit: (e) => { e.preventDefault(); save(); } },
     h('div', { class: 'dlg-h' }, h('h2', { text: prev ? 'Edit topic' : 'New topic' })),
     h('div', { class: 'dlg-b' },
-      fld('Topic', c.title), fld('Workstream', c.ws), fld('Status', c.status),
-      fld('Where we are (latest update)', c.update),
+      fld('Workstream', c.ws), fld('Status', c.status),
       fld('Action required', c.nextStep),
+      fld('Where we are (latest update)', c.update),
       fld('Challenge or blocker', c.challenge),
+      fld('Topic title (optional)', c.title),
       state.config.fields.map((f) => fld(f.name, c.custom[f.id])),
       h('label', { class: 'chk' }, c.decNeeded, h('span', { text: 'Needs a decision' })),
       decBox,
@@ -1337,7 +1334,7 @@ function openItem(id, wsId) {
 
     footer));
   dlg.showModal();
-  c.title.focus();
+  c.nextStep.focus();
 }
 
 /* =====================================================================
@@ -1468,6 +1465,21 @@ function openSettings() {
       }),
       h('div', { style: 'margin-top:10px' }, btn('Add field', () => { draft.fields.push({ id: uid(), name: '', type: 'text', options: [] }); build(); }, 'small')));
 
+    if (CLOUD) {
+      const npw = h('input', { type: 'password', autocomplete: 'new-password', minlength: '8', dir: 'ltr', placeholder: 'New password, at least 8 characters' });
+      const msg = h('div', { class: 'hint-s', role: 'status' });
+      sec.push(h('h3', { text: 'My account' }),
+        h('p', { class: 'hint-s', text: 'Signed in as ' + (cloud.me ? cloud.me.email : '') + '.' }),
+        h('div', { class: 'cols' }, npw, btn('Change password', async () => {
+          if (npw.value.length < 8) { msg.textContent = 'Use at least 8 characters.'; return; }
+          try {
+            await authReq('user', 'PUT', { password: npw.value }, cloud.session && cloud.session.access_token);
+            npw.value = '';
+            msg.textContent = 'Password changed.';
+          } catch (e) { msg.textContent = e.message; }
+        }, 'small')), msg);
+    }
+
     if (isAdmin) {
       sec.push(h('h3', { text: 'People' }),
         h('p', { class: 'hint-s', text: 'People create their own account on the sign in page. They see nothing until you approve them here.' }),
@@ -1564,7 +1576,6 @@ async function init() {
     const hs = takeHash();
     try {
       if (hs && hs.error) showLogin(hs.error);
-      else if (hs && hs.type === 'recovery') showAuth('reset');
       else if (cloud.session) await enter();
       else showLogin();
     } catch (e) { showLogin(e.message); }
