@@ -699,7 +699,7 @@ function showAuth(mode, msg, info) {
   authShell(T[0], mode === 'up' ? 'An admin approves new accounts before they can see the tracker.' : '');
   const email = h('input', { type: 'email', name: 'email', autocomplete: 'username', required: true, dir: 'ltr' });
   const pw = h('input', { type: 'password', name: 'password', autocomplete: mode === 'in' ? 'current-password' : 'new-password',
-    required: true, minlength: mode === 'in' ? null : '8', dir: 'ltr' });
+    required: true, minlength: mode === 'in' ? null : '6', dir: 'ltr' });
   const err = h('div', { class: 'err', role: 'alert', text: msg || '' });
   const ok = h('div', { class: 'ok', role: 'status', text: info || '' });
   const go = btn(T[1], null, 'primary', { type: 'submit' });
