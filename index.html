@@ -2006,9 +2006,8 @@ function openSettings() {
         : 'Your data is saved inside this page when you click Save. These actions run immediately and close this window.' }),
       h('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;margin-top:8px' },
         CLOUD ? null : btn('Save as a new file', () => { dlg.close(); saveFile(true); }),
-        CLOUD ? confirmBtn('Import data from a JSON file', 'Click again: this replaces everything online', () => { dlg.close(); $('#file-input').click(); })
-          : btn('Import data from a JSON file', () => { dlg.close(); $('#file-input').click(); }),
-        btn('Export a JSON backup', () => download(JSON.stringify(state, null, 2), 'tracker-backup-' + TODAY + '.json', 'application/json')),
+        CLOUD ? null : btn('Import data from a JSON file', () => { dlg.close(); $('#file-input').click(); }),
+        CLOUD ? null : btn('Export a JSON backup', () => download(JSON.stringify(state, null, 2), 'tracker-backup-' + TODAY + '.json', 'application/json')),
         confirmBtn('Delete all topics', 'Click again to confirm', () => { dlg.close(); clearAll(); }, 'btn danger'),
         CLOUD ? null : confirmBtn('Restore sample data', 'Click again to confirm', () => { dlg.close(); mutate(() => { state = sampleData(); ui.hideSample = false; }); }, 'btn')));
     sec.push(err);
