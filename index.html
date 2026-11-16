@@ -442,11 +442,11 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 /* ---------- actions by date ---------- */
 .rm { overflow: hidden; padding: 0; }
 .at { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
-.at th { text-align: start; font-size: 12.5px; font-weight: 700; color: var(--ink2); padding: 10px 12px; background: var(--tint); border-bottom: 1px solid var(--line); }
-.at td { padding: 8px 12px; border-top: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
+.at th { text-align: start; font-size: 12.5px; font-weight: 700; color: var(--ink2); padding: 10px 10px; background: var(--tint); border-bottom: 1px solid var(--line); }
+.at td { padding: 9px 10px; border-top: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
 .at tbody tr:first-child td { border-top: 0; }
 .at th:nth-child(1) { width: 124px; padding-inline-start: 16px; } .at td:first-child { padding-inline-start: 13px; border-inline-start: 4px solid var(--c); }
-.at th:nth-child(2) { width: 19%; } .at th:nth-child(4) { width: 132px; } .at th:nth-child(5) { width: 136px; } .at th:nth-child(6) { width: 22%; }
+.at th:nth-child(2) { width: 16%; } .at th:nth-child(4) { width: 164px; } .at th:nth-child(5) { width: 122px; } .at th:nth-child(6) { width: 18%; }
 .at-r { cursor: pointer; }
 .at-r:hover, .at-r:focus-visible { background: var(--tint); outline: none; }
 .at-r.late { background: #fff6f8; }
@@ -458,7 +458,10 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 .at-t b { display: block; font-size: 14.5px; font-weight: 700; line-height: 1.3; }
 .at-a { color: var(--ink2); line-height: 1.35; }
 .at-none { color: var(--ink2); }
-.at .dtag { white-space: normal; }
+.at .dtag { white-space: normal; border-radius: 10px; line-height: 1.25; padding: 3px 9px; max-width: 100%; }
+.at .pill { max-width: 100%; }
+.at-tg { display: block; margin-top: 3px; font-size: 12px; font-weight: 700; color: var(--purple); }
+.at-tg.late { color: var(--crit); }
 @media (max-width: 640px) { .at th:nth-child(4), .at td:nth-child(4), .at th:nth-child(6), .at td:nth-child(6) { display: none; } .at th:nth-child(1) { width: 92px; } .at th:nth-child(5) { width: 100px; } }
 
 /* ---------- calendar ---------- */
@@ -489,6 +492,10 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 .prow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
 .prow .em { flex: 1; overflow-wrap: anywhere; }
 .at-c { color: var(--ink2); line-height: 1.35; }
+.cal-dots i.tg, .cal-key i.tg { background: transparent; box-shadow: inset 0 0 0 2px var(--c, var(--ink2)); }
+.cal-key { margin: 8px 2px 0; font-size: 12.5px; color: var(--ink2); display: flex; align-items: center; gap: 6px; }
+.cal-key i { width: 9px; height: 9px; border-radius: 50%; background: var(--ink2); display: inline-block; }
+.cal-key i.tg { margin-inline-start: 10px; }
 
 </style>
 </head>
@@ -1552,7 +1559,7 @@ function calendar(events) {
       type: list.length ? 'button' : null, onclick: list.length ? () => jumpTo(list[0].it.id) : null,
       'aria-label': fmtDate(day) + (list.length ? ': ' + list.map((e) => (e.target ? 'Target: ' : '') + ttl(e.it)).join(', ') : '') },
       h('span', { class: 'cal-n', text: label }),
-      list.length ? h('span', { class: 'cal-dots' }, list.slice(0, 4).map((e) => h('i', { vars: { '--c': statusById(e.it.status).color } }))) : null);
+      list.length ? h('span', { class: 'cal-dots' }, list.slice(0, 4).map((e) => h('i', { class: e.target ? 'tg' : null, vars: { '--c': statusById(e.it.status).color } }))) : null);
     cells.push(cell);
   }
   return h('div', { class: 'cal' },
@@ -1571,18 +1578,24 @@ function nextSection() {
   events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   if (!events.length) return null;
   const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const rows = events.map((e) => {
-    const it = e.it, st = statusById(it.status), w = wsById(it.ws);
-    const n = diffDays(TODAY, e.date);
-    const t = new Date(parseISO(e.date));
+  // One row per topic, sorted by its first date. The target date is shown inside the date cell.
+  const topicsDated = act.filter((it) => it.nextDate || it.targetDate)
+    .sort((a, b) => ((a.nextDate || a.targetDate) < (b.nextDate || b.targetDate) ? -1 : (a.nextDate || a.targetDate) > (b.nextDate || b.targetDate) ? 1 : 0));
+  const rows = topicsDated.map((it) => {
+    const st = statusById(it.status), w = wsById(it.ws);
+    const main = it.nextDate || it.targetDate;
+    const n = diffDays(TODAY, main);
+    const t = new Date(parseISO(main));
     const rel = n < 0 ? 'Overdue ' + days(-n) : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : 'In ' + days(n);
-    const action = e.target ? 'Target date' : it.nextStep;
+    const tgLate = it.targetDate && diffDays(TODAY, it.targetDate) < 0;
     return h('tr', { class: 'at-r' + (n < 0 ? ' late' : ''), vars: { '--c': st.color }, tabindex: '0', onclick: () => jumpTo(it.id),
       onkeydown: (ev2) => { if (ev2.key === 'Enter') jumpTo(it.id); } },
       h('td', { class: 'at-d' }, h('b', { text: t.getUTCDate() + ' ' + MONTHS[t.getUTCMonth()] + (t.getUTCFullYear() !== new Date().getFullYear() ? ' ' + t.getUTCFullYear() : '') }),
-        h('span', { text: ' ' + WD[t.getUTCDay()] }), h('em', { text: rel })),
+        h('span', { text: ' ' + WD[t.getUTCDay()] }), h('em', { text: rel }),
+        it.nextDate && it.targetDate ? h('small', { class: 'at-tg' + (tgLate ? ' late' : ''), text: 'Target ' + fmtDate(it.targetDate) })
+          : !it.nextDate ? h('small', { class: 'at-tg' + (tgLate ? ' late' : ''), text: 'Target date' }) : null),
       h('td', { class: 'at-t' }, h('i', { dir: 'auto', text: w ? (w.group ? w.group + ': ' : '') + w.name : '' }), it.title ? h('b', { dir: 'auto', text: it.title }) : null),
-      h('td', { class: 'at-a', dir: 'auto', text: action }),
+      h('td', { class: 'at-a', dir: 'auto' }, it.nextStep ? it.nextStep : h('span', { class: 'at-none', text: '-' })),
       h('td', { class: 'at-s' }, pill(st)),
       h('td', { class: 'at-x' }, it.decision.needed ? dtag(it, true) : h('span', { class: 'at-none', text: '-' })),
       h('td', { class: 'at-c', dir: 'auto' }, it.challenge ? it.challenge : h('span', { class: 'at-none', text: '-' })));
@@ -1590,7 +1603,8 @@ function nextSection() {
   const miss = act.filter((it) => !it.nextDate && !it.targetDate).length;
   return h('section', { class: 'sec', id: 'next' },
     h('h2', { text: 'Actions required' }),
-    h('div', { class: 'panel cal-p' }, calendar(events)),
+    h('div', { class: 'panel cal-p' }, calendar(events),
+      h('p', { class: 'cal-key' }, h('i'), ' Action date', h('i', { class: 'tg' }), ' Target date')),
     h('div', { class: 'panel rm' },
       h('table', { class: 'at' },
         h('thead', {}, h('tr', {}, ['Date', 'Topic', 'Action required', 'Status', 'Decision from', 'Challenge'].map((x) => h('th', { scope: 'col', text: x })))),

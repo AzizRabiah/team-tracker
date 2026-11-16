@@ -434,11 +434,11 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 /* ---------- actions by date ---------- */
 .rm { overflow: hidden; padding: 0; }
 .at { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
-.at th { text-align: start; font-size: 12.5px; font-weight: 700; color: var(--ink2); padding: 10px 12px; background: var(--tint); border-bottom: 1px solid var(--line); }
-.at td { padding: 8px 12px; border-top: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
+.at th { text-align: start; font-size: 12.5px; font-weight: 700; color: var(--ink2); padding: 10px 10px; background: var(--tint); border-bottom: 1px solid var(--line); }
+.at td { padding: 9px 10px; border-top: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
 .at tbody tr:first-child td { border-top: 0; }
 .at th:nth-child(1) { width: 124px; padding-inline-start: 16px; } .at td:first-child { padding-inline-start: 13px; border-inline-start: 4px solid var(--c); }
-.at th:nth-child(2) { width: 19%; } .at th:nth-child(4) { width: 132px; } .at th:nth-child(5) { width: 136px; } .at th:nth-child(6) { width: 22%; }
+.at th:nth-child(2) { width: 16%; } .at th:nth-child(4) { width: 164px; } .at th:nth-child(5) { width: 122px; } .at th:nth-child(6) { width: 18%; }
 .at-r { cursor: pointer; }
 .at-r:hover, .at-r:focus-visible { background: var(--tint); outline: none; }
 .at-r.late { background: #fff6f8; }
@@ -450,7 +450,10 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 .at-t b { display: block; font-size: 14.5px; font-weight: 700; line-height: 1.3; }
 .at-a { color: var(--ink2); line-height: 1.35; }
 .at-none { color: var(--ink2); }
-.at .dtag { white-space: normal; }
+.at .dtag { white-space: normal; border-radius: 10px; line-height: 1.25; padding: 3px 9px; max-width: 100%; }
+.at .pill { max-width: 100%; }
+.at-tg { display: block; margin-top: 3px; font-size: 12px; font-weight: 700; color: var(--purple); }
+.at-tg.late { color: var(--crit); }
 @media (max-width: 640px) { .at th:nth-child(4), .at td:nth-child(4), .at th:nth-child(6), .at td:nth-child(6) { display: none; } .at th:nth-child(1) { width: 92px; } .at th:nth-child(5) { width: 100px; } }
 
 /* ---------- calendar ---------- */
@@ -481,3 +484,7 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 .prow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
 .prow .em { flex: 1; overflow-wrap: anywhere; }
 .at-c { color: var(--ink2); line-height: 1.35; }
+.cal-dots i.tg, .cal-key i.tg { background: transparent; box-shadow: inset 0 0 0 2px var(--c, var(--ink2)); }
+.cal-key { margin: 8px 2px 0; font-size: 12.5px; color: var(--ink2); display: flex; align-items: center; gap: 6px; }
+.cal-key i { width: 9px; height: 9px; border-radius: 50%; background: var(--ink2); display: inline-block; }
+.cal-key i.tg { margin-inline-start: 10px; }

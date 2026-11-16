@@ -1047,7 +1047,7 @@ function calendar(events) {
       type: list.length ? 'button' : null, onclick: list.length ? () => jumpTo(list[0].it.id) : null,
       'aria-label': fmtDate(day) + (list.length ? ': ' + list.map((e) => (e.target ? 'Target: ' : '') + ttl(e.it)).join(', ') : '') },
       h('span', { class: 'cal-n', text: label }),
-      list.length ? h('span', { class: 'cal-dots' }, list.slice(0, 4).map((e) => h('i', { vars: { '--c': statusById(e.it.status).color } }))) : null);
+      list.length ? h('span', { class: 'cal-dots' }, list.slice(0, 4).map((e) => h('i', { class: e.target ? 'tg' : null, vars: { '--c': statusById(e.it.status).color } }))) : null);
     cells.push(cell);
   }
   return h('div', { class: 'cal' },
@@ -1066,18 +1066,24 @@ function nextSection() {
   events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   if (!events.length) return null;
   const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const rows = events.map((e) => {
-    const it = e.it, st = statusById(it.status), w = wsById(it.ws);
-    const n = diffDays(TODAY, e.date);
-    const t = new Date(parseISO(e.date));
+  // One row per topic, sorted by its first date. The target date is shown inside the date cell.
+  const topicsDated = act.filter((it) => it.nextDate || it.targetDate)
+    .sort((a, b) => ((a.nextDate || a.targetDate) < (b.nextDate || b.targetDate) ? -1 : (a.nextDate || a.targetDate) > (b.nextDate || b.targetDate) ? 1 : 0));
+  const rows = topicsDated.map((it) => {
+    const st = statusById(it.status), w = wsById(it.ws);
+    const main = it.nextDate || it.targetDate;
+    const n = diffDays(TODAY, main);
+    const t = new Date(parseISO(main));
     const rel = n < 0 ? 'Overdue ' + days(-n) : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : 'In ' + days(n);
-    const action = e.target ? 'Target date' : it.nextStep;
+    const tgLate = it.targetDate && diffDays(TODAY, it.targetDate) < 0;
     return h('tr', { class: 'at-r' + (n < 0 ? ' late' : ''), vars: { '--c': st.color }, tabindex: '0', onclick: () => jumpTo(it.id),
       onkeydown: (ev2) => { if (ev2.key === 'Enter') jumpTo(it.id); } },
       h('td', { class: 'at-d' }, h('b', { text: t.getUTCDate() + ' ' + MONTHS[t.getUTCMonth()] + (t.getUTCFullYear() !== new Date().getFullYear() ? ' ' + t.getUTCFullYear() : '') }),
-        h('span', { text: ' ' + WD[t.getUTCDay()] }), h('em', { text: rel })),
+        h('span', { text: ' ' + WD[t.getUTCDay()] }), h('em', { text: rel }),
+        it.nextDate && it.targetDate ? h('small', { class: 'at-tg' + (tgLate ? ' late' : ''), text: 'Target ' + fmtDate(it.targetDate) })
+          : !it.nextDate ? h('small', { class: 'at-tg' + (tgLate ? ' late' : ''), text: 'Target date' }) : null),
       h('td', { class: 'at-t' }, h('i', { dir: 'auto', text: w ? (w.group ? w.group + ': ' : '') + w.name : '' }), it.title ? h('b', { dir: 'auto', text: it.title }) : null),
-      h('td', { class: 'at-a', dir: 'auto', text: action }),
+      h('td', { class: 'at-a', dir: 'auto' }, it.nextStep ? it.nextStep : h('span', { class: 'at-none', text: '-' })),
       h('td', { class: 'at-s' }, pill(st)),
       h('td', { class: 'at-x' }, it.decision.needed ? dtag(it, true) : h('span', { class: 'at-none', text: '-' })),
       h('td', { class: 'at-c', dir: 'auto' }, it.challenge ? it.challenge : h('span', { class: 'at-none', text: '-' })));
@@ -1085,7 +1091,8 @@ function nextSection() {
   const miss = act.filter((it) => !it.nextDate && !it.targetDate).length;
   return h('section', { class: 'sec', id: 'next' },
     h('h2', { text: 'Actions required' }),
-    h('div', { class: 'panel cal-p' }, calendar(events)),
+    h('div', { class: 'panel cal-p' }, calendar(events),
+      h('p', { class: 'cal-key' }, h('i'), ' Action date', h('i', { class: 'tg' }), ' Target date')),
     h('div', { class: 'panel rm' },
       h('table', { class: 'at' },
         h('thead', {}, h('tr', {}, ['Date', 'Topic', 'Action required', 'Status', 'Decision from', 'Challenge'].map((x) => h('th', { scope: 'col', text: x })))),
