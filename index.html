@@ -994,7 +994,7 @@ function authMsg(j) {
   if (c === 'invalid_credentials') return 'Wrong email or password.';
   if (c === 'signup_disabled') return 'Sign up is closed.';
   if (c === 'user_already_exists') return 'This email already has an account. Use Sign in.';
-  if (c === 'weak_password') return 'Choose a stronger password, at least 8 characters.';
+  if (c === 'weak_password') return 'Choose a stronger password, at least 6 characters.';
   if (c === 'email_not_confirmed') return 'Confirm your email first. Check your inbox.';
   if (c === 'same_password') return 'Choose a different password.';
   if (/rate_limit/.test(c)) return 'Too many tries. Wait a few minutes and try again.';
@@ -1231,7 +1231,7 @@ function showAuth(mode, msg, info) {
   } },
   fld('Email', email),
   fld('Password', pw),
-  mode === 'up' ? h('p', { class: 'hint-s', text: 'At least 8 characters. You can change it later in Settings.' }) : null,
+  mode === 'up' ? h('p', { class: 'hint-s', text: 'At least 6 characters. You can change it later in Settings.' }) : null,
   h('div', { class: 'login-f' }, go, mode === 'in' ? to('Create account', 'up') : to('Back to sign in', 'in')),
   ok, err);
   $('#page').replaceChildren(h('section', { class: 'panel login-p' }, form));
@@ -1970,12 +1970,12 @@ function openSettings() {
       h('div', { style: 'margin-top:10px' }, btn('Add field', () => { draft.fields.push({ id: uid(), name: '', type: 'text', options: [] }); build(); }, 'small')));
 
     if (CLOUD) {
-      const npw = h('input', { type: 'password', autocomplete: 'new-password', minlength: '8', dir: 'ltr', placeholder: 'New password, at least 8 characters' });
+      const npw = h('input', { type: 'password', autocomplete: 'new-password', minlength: '6', dir: 'ltr', placeholder: 'New password, at least 6 characters' });
       const msg = h('div', { class: 'hint-s', role: 'status' });
       sec.push(h('h3', { text: 'My account' }),
         h('p', { class: 'hint-s', text: 'Signed in as ' + (cloud.me ? cloud.me.email : '') + '.' }),
         h('div', { class: 'cols' }, npw, btn('Change password', async () => {
-          if (npw.value.length < 8) { msg.textContent = 'Use at least 8 characters.'; return; }
+          if (npw.value.length < 6) { msg.textContent = 'Use at least 6 characters.'; return; }
           try {
             await authReq('user', 'PUT', { password: npw.value }, cloud.session && cloud.session.access_token);
             npw.value = '';
