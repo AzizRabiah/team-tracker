@@ -812,8 +812,8 @@ function icon(status) {
   el.innerHTML = ICONS[s.kind] || ICONS.ontrack; // static markup from this file, never user data
   return el;
 }
-// The "decision from" tag is one quiet color. It only turns to the attention color when the topic itself is urgent.
-const urgent = (it) => isActive(it) && (['risk', 'blocked'].includes(kindOf(it)) || overdueDays(it) > 0 || targetPassed(it));
+// The "decision from" tag is always brand purple. It only turns red when the topic itself is urgent (blocked, needs attention, past its target date).
+const urgent = (it) => isActive(it) && (['risk', 'blocked'].includes(kindOf(it)) || targetPassed(it));
 function dtag(it, short) {
   const name = (it.decision.by || '').trim();
   const hot = urgent(it);
@@ -1430,7 +1430,7 @@ function openSettings() {
       h('div', { style: 'margin-top:10px' }, btn('Add status', () => { draft.statuses.push({ id: uid(), label: '', kind: 'ontrack', color: '#4f008c' }); build(); }, 'small')));
 
     sec.push(h('h3', { text: 'Who decides' }),
-      h('p', { class: 'hint-s', text: 'On a topic you type who decides. Names listed here show up as suggestions. The tag turns red only when the topic is blocked, needs attention or is late.' }),
+      h('p', { class: 'hint-s', text: 'On a topic you type who decides. Names listed here show up as suggestions. The tag is purple, and turns red only when the topic is blocked, needs attention or is past its target date.' }),
       draft.deciders.map((d, i) => {
         const n = usedDec(d.label);
         return h('div', { class: 'row-e' },

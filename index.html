@@ -431,7 +431,7 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 .group .gt h2 { font-size: 19px; color: var(--purple); }
 .group:has(.gt) { margin-top: 8px; }
 
-.dtag { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; background: #ebe7f1; color: #4a4458; white-space: nowrap; }
+.dtag { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; background: #4f008c; color: #fff; white-space: nowrap; }
 .dtag.hot { background: #ff375e; color: #fff; }
 .rm-chip .dtag { align-self: flex-start; margin-top: 4px; }
 .rm-h small { display: block; font-weight: 500; font-size: 12px; color: var(--ink3); margin-top: 1px; }
@@ -1325,8 +1325,8 @@ function icon(status) {
   el.innerHTML = ICONS[s.kind] || ICONS.ontrack; // static markup from this file, never user data
   return el;
 }
-// The "decision from" tag is one quiet color. It only turns to the attention color when the topic itself is urgent.
-const urgent = (it) => isActive(it) && (['risk', 'blocked'].includes(kindOf(it)) || overdueDays(it) > 0 || targetPassed(it));
+// The "decision from" tag is always brand purple. It only turns red when the topic itself is urgent (blocked, needs attention, past its target date).
+const urgent = (it) => isActive(it) && (['risk', 'blocked'].includes(kindOf(it)) || targetPassed(it));
 function dtag(it, short) {
   const name = (it.decision.by || '').trim();
   const hot = urgent(it);
@@ -1943,7 +1943,7 @@ function openSettings() {
       h('div', { style: 'margin-top:10px' }, btn('Add status', () => { draft.statuses.push({ id: uid(), label: '', kind: 'ontrack', color: '#4f008c' }); build(); }, 'small')));
 
     sec.push(h('h3', { text: 'Who decides' }),
-      h('p', { class: 'hint-s', text: 'On a topic you type who decides. Names listed here show up as suggestions. The tag turns red only when the topic is blocked, needs attention or is late.' }),
+      h('p', { class: 'hint-s', text: 'On a topic you type who decides. Names listed here show up as suggestions. The tag is purple, and turns red only when the topic is blocked, needs attention or is past its target date.' }),
       draft.deciders.map((d, i) => {
         const n = usedDec(d.label);
         return h('div', { class: 'row-e' },
