@@ -812,19 +812,12 @@ function icon(status) {
   el.innerHTML = ICONS[s.kind] || ICONS.ontrack; // static markup from this file, never user data
   return el;
 }
-const deciderByName = (n) => { const k = (n || '').trim().toLowerCase(); return k ? state.config.deciders.find((d) => d.label.trim().toLowerCase() === k) : null; };
-// Automatic colors for names not listed in Settings. Never red, yellow or green: those mean status.
-const AUTO_COL = ['#4f008c', '#ff6a39', '#1bced8', '#a54ee1'];
-function dcolor(name) {
-  const d = deciderByName(name);
-  if (d) return d.color;
-  let x = 0; for (const ch of name) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
-  return AUTO_COL[x % AUTO_COL.length];
-}
+// The "decision from" tag is one quiet color. It only turns to the attention color when the topic itself is urgent.
+const urgent = (it) => isActive(it) && (['risk', 'blocked'].includes(kindOf(it)) || overdueDays(it) > 0 || targetPassed(it));
 function dtag(it, short) {
   const name = (it.decision.by || '').trim();
-  const col = name ? dcolor(name) : '#4f008c';
-  return h('span', { class: 'dtag', vars: { '--c': col, '--ci': inkOn(col) }, text: name ? (short ? name : 'Decision: ' + name) : 'Decision needed' });
+  const hot = urgent(it);
+  return h('span', { class: 'dtag' + (hot ? ' hot' : ''), text: name ? (short ? name : 'Decision: ' + name) : 'Decision needed' });
 }
 function pill(status) {
   const s = typeof status === 'string' ? statusById(status) : status;
@@ -1437,19 +1430,15 @@ function openSettings() {
       h('div', { style: 'margin-top:10px' }, btn('Add status', () => { draft.statuses.push({ id: uid(), label: '', kind: 'ontrack', color: '#4f008c' }); build(); }, 'small')));
 
     sec.push(h('h3', { text: 'Who decides' }),
-      h('p', { class: 'hint-s', text: 'On a topic you type who decides. Names listed here get their own color, and show up as suggestions. Any other name gets an automatic color.' }),
+      h('p', { class: 'hint-s', text: 'On a topic you type who decides. Names listed here show up as suggestions. The tag turns red only when the topic is blocked, needs attention or is late.' }),
       draft.deciders.map((d, i) => {
         const n = usedDec(d.label);
-        const pal = PALETTE.includes(d.color) ? PALETTE : [d.color].concat(PALETTE);
-        const sw = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Color' }, pal.map((col) =>
-          h('button', { class: 'sw', type: 'button', role: 'radio', 'aria-checked': col === d.color ? 'true' : 'false', 'aria-label': col, style: 'background:' + col,
-            onclick: () => { d.color = col; build(); } })));
         return h('div', { class: 'row-e' },
-          h('div', { class: 'cols' }, bind(txt(d.label, 'Name, for example GM'), 'label', d), sw),
+          h('div', { class: 'cols' }, bind(txt(d.label, 'Name, for example GM'), 'label', d)),
           h('div', { class: 'btns' },
-            iconBtn('Move up', '\u25B2', () => move(draft.deciders, i, -1), i === 0),
-            iconBtn('Move down', '\u25BC', () => move(draft.deciders, i, 1), i === draft.deciders.length - 1),
-            iconBtn('Delete', '\u2715', () => { draft.deciders.splice(i, 1); build(); }, n > 0,
+            iconBtn('Move up', '▲', () => move(draft.deciders, i, -1), i === 0),
+            iconBtn('Move down', '▼', () => move(draft.deciders, i, 1), i === draft.deciders.length - 1),
+            iconBtn('Delete', '✕', () => { draft.deciders.splice(i, 1); build(); }, n > 0,
               n > 0 ? n + ' topics use this name. Change them first.' : 'Delete')));
       }),
       h('div', { style: 'margin-top:10px' }, btn('Add person', () => { draft.deciders.push({ id: uid(), label: '', color: '#4f008c' }); build(); }, 'small')));
