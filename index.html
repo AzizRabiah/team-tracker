@@ -1710,6 +1710,7 @@ function itemRow(it) {
   const l1 = h('div', { class: 'it-l1' },
     h('span', { class: 'it-title', dir: 'auto', text: ttl(it) }),
     h('span', { style: 'display:inline-flex;gap:8px;align-items:center' }, pill(st),
+      ui.edit && isActive(it) && doneStatus() ? btn('Mark done', (e) => { e.preventDefault(); e.stopPropagation(); markDone(it); }, 'small edit-only') : null,
       ui.edit ? btn('Edit', (e) => { e.preventDefault(); e.stopPropagation(); openItem(it.id); }, 'small edit-only') : null));
   const main = h('div', { class: 'it-main' }, l1);
   if (it.update) main.append(h('div', { class: 'it-upd', dir: 'auto', text: it.update }));
@@ -1741,6 +1742,18 @@ function itemRow(it) {
   }
   d.append(body);
   return d;
+}
+
+const doneStatus = () => state.config.statuses.find((x) => x.kind === 'done');
+function markDone(it) {
+  const st = doneStatus();
+  if (!st) return;
+  mutate(() => {
+    it.status = st.id;
+    it.updateDate = TODAY;
+    it.history = (it.history || []).concat([{ date: TODAY, status: st.id, text: '' }]);
+  });
+  toast('Marked as done. It moved to the Done list under its workstream.');
 }
 
 function jumpTo(id) {
