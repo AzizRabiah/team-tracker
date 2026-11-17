@@ -813,7 +813,8 @@ function icon(status) {
   return el;
 }
 const deciderByName = (n) => { const k = (n || '').trim().toLowerCase(); return k ? state.config.deciders.find((d) => d.label.trim().toLowerCase() === k) : null; };
-const AUTO_COL = ['#4f008c', '#ff6a39', '#1bced8', '#a54ee1', '#ff375e', '#00c48c'];
+// Automatic colors for names not listed in Settings. Never red, yellow or green: those mean status.
+const AUTO_COL = ['#4f008c', '#ff6a39', '#1bced8', '#a54ee1'];
 function dcolor(name) {
   const d = deciderByName(name);
   if (d) return d.color;
