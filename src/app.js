@@ -86,6 +86,7 @@ function fmtDate(iso) {
   const s = d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()];
   return d.getUTCFullYear() === new Date().getFullYear() ? s : s + ' ' + d.getUTCFullYear();
 }
+const extras = (it) => state.config.fields.filter((f) => it.custom[f.id]).map((f) => f.name + ': ' + (f.type === 'date' ? fmtDate(it.custom[f.id]) : it.custom[f.id]));
 const ttl = (it) => it.title || it.nextStep || it.update || it.challenge || 'Untitled';
 const days = (n) => n + (n === 1 ? ' day' : ' days');
 const topics = (n) => n + (n === 1 ? ' topic' : ' topics');
@@ -1076,7 +1077,8 @@ function nextSection() {
         h('span', { text: ' ' + WD[t.getUTCDay()] }), h('em', { text: rel }),
         it.nextDate && it.targetDate ? h('small', { class: 'at-tg' + (tgLate ? ' late' : ''), text: 'Target ' + fmtDate(it.targetDate) })
           : !it.nextDate ? h('small', { class: 'at-tg' + (tgLate ? ' late' : ''), text: 'Target date' }) : null),
-      h('td', { class: 'at-t' }, h('i', { dir: 'auto', text: w ? (w.group ? w.group + ': ' : '') + w.name : '' }), it.title ? h('b', { dir: 'auto', text: it.title }) : null),
+      h('td', { class: 'at-t' }, h('i', { dir: 'auto', text: w ? (w.group ? w.group + ': ' : '') + w.name : '' }), it.title ? h('b', { dir: 'auto', text: it.title }) : null,
+        ...extras(it).map((x) => h('small', { class: 'at-x2', dir: 'auto', text: x }))),
       h('td', { class: 'at-a', dir: 'auto' }, it.nextStep ? it.nextStep : h('span', { class: 'at-none', text: '-' })),
       h('td', { class: 'at-s' }, pill(st)),
       h('td', { class: 'at-x' }, it.decision.needed ? dtag(it, true) : h('span', { class: 'at-none', text: '-' })),
@@ -1208,6 +1210,7 @@ function itemRow(it) {
   }
   if (od) meta.append(h('span', { class: 'flag crit', text: 'Overdue by ' + days(od) }));
   if (!od && tp) meta.append(h('span', { class: 'flag crit', text: 'Past target date' }));
+  for (const x of extras(it)) meta.append(h('span', { dir: 'auto', text: x }));
   if (isActive(it) && it.decision.needed) meta.append(dtag(it));
   if (meta.childNodes.length) main.append(meta);
 
