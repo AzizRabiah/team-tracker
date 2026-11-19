@@ -1758,7 +1758,7 @@ function openItem(id, wsId) {
       decBox,
       h('details', { class: 'dates-d', open: (it.nextDate || it.targetDate) ? true : null },
         h('summary', { text: 'Dates (optional)' }),
-        h('p', { class: 'hint-s', text: 'Dates build the \u201cActions required\u201d table. A topic with no date is left out of it. Any date works, near or far.' }),
+        h('p', { class: 'hint-s', text: 'The action date puts the topic on the calendar. The launch date is free text, for example June 2027 or TBD.' }),
         fld('Action date', c.nextDate), fld('Launch date', c.targetDate),
         fld('Last updated (changes automatically when you edit the status or text)', c.updateDate)),
       err),
