@@ -515,3 +515,4 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 .sec-done > summary { cursor: pointer; color: var(--purple); font-weight: 700; padding: 6px 0; width: max-content; }
 .sec-done > .cards { margin-top: 8px; }
 @media (max-width: 640px) { .tc-h { flex-direction: column; } .tc-side { align-items: flex-start; } }
+.tc-side .pill { white-space: normal; max-width: 260px; }

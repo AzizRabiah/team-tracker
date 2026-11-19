@@ -523,6 +523,7 @@ details.item > summary { padding: 11px 48px 11px 22px; }
 .sec-done > summary { cursor: pointer; color: var(--purple); font-weight: 700; padding: 6px 0; width: max-content; }
 .sec-done > .cards { margin-top: 8px; }
 @media (max-width: 640px) { .tc-h { flex-direction: column; } .tc-side { align-items: flex-start; } }
+.tc-side .pill { white-space: normal; max-width: 260px; }
 
 </style>
 </head>
@@ -810,7 +811,7 @@ function normalize(raw) {
       status: stIds.has(x.status) ? x.status : statuses[0].id,
       update: str(x.update), updateDate: parseISO(x.updateDate) != null ? x.updateDate : '',
       nextStep: str(x.nextStep), nextDate: parseISO(x.nextDate) != null ? x.nextDate : '',
-      targetDate: parseISO(x.targetDate) != null ? x.targetDate : '',
+      targetDate: str(x.targetDate).slice(0, 60),
       challenge: str(x.challenge),
       decision: { needed: dec.needed === true, text: str(dec.text), by: dLabel.has(dec.by) ? dLabel.get(dec.by) : str(dec.by).slice(0, 60) },
       custom,
@@ -1326,7 +1327,10 @@ function overdueDays(it) {
   const d = diffDays(TODAY, it.nextDate);
   return d < 0 ? -d : 0;
 }
-function targetPassed(it) { return isActive(it) && it.targetDate && diffDays(TODAY, it.targetDate) < 0; }
+// The launch date is free text (June 2027, TBD). Only a real date can be late.
+const isDay = (v) => parseISO(v) != null;
+const launchText = (v) => (isDay(v) ? fmtDate(v) : v);
+function targetPassed(it) { return isActive(it) && isDay(it.targetDate) && diffDays(TODAY, it.targetDate) < 0; }
 function sortItems(list) {
   return list.slice().sort((a, b) =>
     (KIND_RANK[kindOf(a)] - KIND_RANK[kindOf(b)]) ||
@@ -1571,7 +1575,7 @@ function calendar(events) {
     const label = n === 1 || day === start ? MONTHS[t.getUTCMonth()] + ' ' + n : String(n);
     const cell = h(list.length ? 'button' : 'div', { class: 'cal-c' + (day === TODAY ? ' today' : '') + (list.length ? ' has' : '') + (day < TODAY ? ' past' : ''),
       type: list.length ? 'button' : null, onclick: list.length ? () => jumpTo(list[0].it.id) : null,
-      'aria-label': fmtDate(day) + (list.length ? ': ' + list.map((e) => (e.target ? 'Target: ' : '') + ttl(e.it)).join(', ') : '') },
+      'aria-label': fmtDate(day) + (list.length ? ': ' + list.map((e) => (e.target ? 'Launch: ' : '') + ttl(e.it)).join(', ') : '') },
       h('span', { class: 'cal-n', text: label }),
       list.length ? h('span', { class: 'cal-dots' }, list.slice(0, 4).map((e) => h('i', { class: e.target ? 'tg' : null, vars: { '--c': statusById(e.it.status).color } }))) : null);
     cells.push(cell);
@@ -1597,8 +1601,8 @@ function topicCard(it, done) {
       done ? null : h('em', { class: n < 0 ? 'late' : '', text: n < 0 ? 'Overdue ' + days(-n) : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : 'In ' + days(n) })));
   }
   if (it.targetDate) {
-    const late = !done && diffDays(TODAY, it.targetDate) < 0;
-    facts.push(h('span', { class: 'tc-f' }, h('span', { class: 'tc-k', text: 'Target' }), h('b', { text: fmtDate(it.targetDate) }),
+    const late = !done && isDay(it.targetDate) && diffDays(TODAY, it.targetDate) < 0;
+    facts.push(h('span', { class: 'tc-f' }, h('span', { class: 'tc-k', text: 'Launch' }), h('b', { dir: 'auto', text: launchText(it.targetDate) }),
       late ? h('em', { class: 'late', text: 'Passed' }) : null));
   }
   for (const f of state.config.fields) {
@@ -1626,7 +1630,7 @@ function topicsSection() {
   const events = [];
   for (const it of act) {
     if (it.nextDate) events.push({ it, date: it.nextDate, target: false });
-    if (it.targetDate && it.targetDate !== it.nextDate) events.push({ it, date: it.targetDate, target: true });
+    if (isDay(it.targetDate) && it.targetDate !== it.nextDate) events.push({ it, date: it.targetDate, target: true });
   }
   const sec = h('section', { class: 'sec', id: 'next' }, h('h2', { text: 'Topics' }));
   sec.append(act.length ? h('div', { class: 'cards' }, act.map((it) => topicCard(it, false))) : h('div', { class: 'panel' }, h('p', { class: 'hint', style: 'margin:0;padding:16px 20px', text: 'No open topics.' })));
@@ -1637,7 +1641,7 @@ function topicsSection() {
   }
   if (events.length) {
     sec.append(h('div', { class: 'panel cal-p', style: 'margin-top:20px' }, calendar(events),
-      h('p', { class: 'cal-key' }, h('i'), ' Action date', h('i', { class: 'tg' }), ' Target date')));
+      h('p', { class: 'cal-key' }, h('i'), ' Action date', h('i', { class: 'tg' }), ' Launch date')));
   }
   return sec;
 }
@@ -1692,7 +1696,7 @@ function openItem(id, wsId) {
   c.updateDate = h('input', { type: 'date', value: it.updateDate });
   c.nextStep = area(it.nextStep, 2);
   c.nextDate = h('input', { type: 'date', value: it.nextDate });
-  c.targetDate = h('input', { type: 'date', value: it.targetDate });
+  c.targetDate = h('input', { type: 'text', dir: 'auto', maxlength: '60', value: it.targetDate, placeholder: 'For example: June 2027, or TBD' });
   c.challenge = area(it.challenge, 2);
   c.decNeeded = h('input', { type: 'checkbox', checked: it.decision.needed });
   c.decText = area(it.decision.text, 2);
@@ -1718,7 +1722,7 @@ function openItem(id, wsId) {
     const next = Object.assign({}, it, {
       title: c.title.value.trim(), ws: c.ws.value, status: c.status.value,
       update: c.update.value.trim(), updateDate: c.updateDate.value,
-      nextStep: c.nextStep.value.trim(), nextDate: c.nextDate.value, targetDate: c.targetDate.value,
+      nextStep: c.nextStep.value.trim(), nextDate: c.nextDate.value, targetDate: c.targetDate.value.trim(),
       challenge: c.challenge.value.trim(),
       decision: { needed: c.decNeeded.checked, text: c.decText.value.trim(), by: c.decFrom.value.trim() },
       custom: {},
@@ -1755,7 +1759,7 @@ function openItem(id, wsId) {
       h('details', { class: 'dates-d', open: (it.nextDate || it.targetDate) ? true : null },
         h('summary', { text: 'Dates (optional)' }),
         h('p', { class: 'hint-s', text: 'Dates build the \u201cActions required\u201d table. A topic with no date is left out of it. Any date works, near or far.' }),
-        fld('Action date', c.nextDate), fld('Target date', c.targetDate),
+        fld('Action date', c.nextDate), fld('Launch date', c.targetDate),
         fld('Last updated (changes automatically when you edit the status or text)', c.updateDate)),
       err),
 
