@@ -1079,7 +1079,7 @@ function topicCard(it, done) {
         it.title ? h('b', { dir: 'auto', text: it.title }) : null),
       h('div', { class: 'tc-side' }, pill(st),
         ui.edit ? h('div', { class: 'tc-btns' }, btn('Edit', () => openItem(it.id), 'small'),
-          !done && doneStatus() ? btn('Mark done', () => markDone(it), 'small') : null) : null)),
+          btn('Update status', () => openStatus(it), 'small')) : null)),
     lines);
 }
 
@@ -1106,16 +1106,25 @@ function topicsSection() {
   return sec;
 }
 
-const doneStatus = () => state.config.statuses.find((x) => x.kind === 'done');
-function markDone(it) {
-  const st = doneStatus();
-  if (!st) return;
-  mutate(() => {
-    it.status = st.id;
-    it.updateDate = TODAY;
-    it.history = (it.history || []).concat([{ date: TODAY, status: st.id, text: '' }]);
-  });
-  toast('Marked as done. It moved to the Done list under its workstream.');
+function openStatus(it) {
+  const dlg = $('#dlg');
+  const pick = (st) => {
+    dlg.close();
+    if (st.id === it.status) return;
+    mutate(() => {
+      it.status = st.id;
+      it.updateDate = TODAY;
+      it.history = (it.history || []).concat([{ date: TODAY, status: st.id, text: '' }]);
+    });
+  };
+  dlg.replaceChildren(h('div', { class: 'dlg' },
+    h('div', { class: 'dlg-h' }, h('h2', { text: 'Update status' })),
+    h('div', { class: 'dlg-b' },
+      h('p', { class: 'hint-s', dir: 'auto', text: ttl(it) }),
+      h('div', { class: 'st-list' }, state.config.statuses.map((st) => h('button', { class: 'st-opt' + (st.id === it.status ? ' on' : ''), type: 'button', onclick: () => pick(st) },
+        pill(st), st.id === it.status ? h('span', { class: 'hint-s', text: ' current' }) : null)))),
+    h('div', { class: 'dlg-f' }, btn('Cancel', () => dlg.close()))));
+  dlg.showModal();
 }
 
 function flashTo(el) {
