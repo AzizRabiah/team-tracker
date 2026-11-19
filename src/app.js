@@ -989,7 +989,7 @@ function boardRow(ws) {
   const nx = nexts[0];
   const late = nx && diffDays(TODAY, nx) < 0;
   const att = act.filter((i) => ['risk', 'blocked'].includes(kindOf(i))).length;
-  const a = h('a', { class: 'brow', href: '#ws-' + ws.id, onclick: (e) => { e.preventDefault(); const el = document.querySelector('tr[data-ws="' + CSS.escape(ws.id) + '"]'); if (el) flashTo(el); } },
+  const a = h('a', { class: 'brow', href: '#ws-' + ws.id, onclick: (e) => { e.preventDefault(); const el = document.querySelector('.tcard[data-ws="' + CSS.escape(ws.id) + '"]'); if (el) flashTo(el); } },
     icon(st),
     h('span', { class: 'nm', dir: 'auto', text: ws.name }),
     segBar(countsFor(items), false, ws.name),
@@ -1045,50 +1045,39 @@ function calendar(events) {
 // One table with everything about every topic, visible without opening anything.
 const wsIndex = (it) => state.config.workstreams.findIndex((w) => w.id === it.ws);
 const ordered = (list) => list.slice().sort((a, b) => (wsIndex(a) - wsIndex(b)) || ((a.nextDate || '9999') < (b.nextDate || '9999') ? -1 : (a.nextDate || '9999') > (b.nextDate || '9999') ? 1 : 0));
-const dash = () => h('span', { class: 'at-none', text: '-' });
-function dueCell(it, done) {
-  const td = h('td', { class: 'tb-d' });
+// One block per topic, read from top to bottom. Every label is written out, nothing is hidden.
+function topicCard(it, done) {
+  const st = statusById(it.status), w = wsById(it.ws);
+  const line = (label, ...kids) => h('div', { class: 'tc-l' }, h('span', { class: 'tc-k', text: label }), h('span', { class: 'tc-v', dir: 'auto' }, ...kids));
+  const lines = [];
+  if (it.nextStep) lines.push(h('div', { class: 'tc-act', dir: 'auto' }, h('span', { class: 'tc-k', text: 'Action required' }), it.nextStep));
+  const facts = [];
   if (it.nextDate) {
-    const t = new Date(parseISO(it.nextDate));
-    td.append(h('b', { text: t.getUTCDate() + ' ' + MONTHS[t.getUTCMonth()] + (t.getUTCFullYear() !== new Date().getFullYear() ? ' ' + t.getUTCFullYear() : '') }));
-    if (!done) {
-      const n = diffDays(TODAY, it.nextDate);
-      td.append(h('em', { class: n < 0 ? 'late' : '', text: n < 0 ? 'Overdue ' + days(-n) : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : 'In ' + days(n) }));
-    }
+    const n = diffDays(TODAY, it.nextDate);
+    facts.push(h('span', { class: 'tc-f' }, h('span', { class: 'tc-k', text: 'Due' }), h('b', { text: fmtDate(it.nextDate) }),
+      done ? null : h('em', { class: n < 0 ? 'late' : '', text: n < 0 ? 'Overdue ' + days(-n) : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : 'In ' + days(n) })));
   }
   if (it.targetDate) {
     const late = !done && diffDays(TODAY, it.targetDate) < 0;
-    td.append(h('small', { class: 'tb-tg' + (late ? ' late' : ''), text: 'Target ' + fmtDate(it.targetDate) }));
+    facts.push(h('span', { class: 'tc-f' }, h('span', { class: 'tc-k', text: 'Target' }), h('b', { text: fmtDate(it.targetDate) }),
+      late ? h('em', { class: 'late', text: 'Passed' }) : null));
   }
-  if (!td.childNodes.length) td.append(dash());
-  return td;
-}
-function topicTable(list, done) {
-  const F = state.config.fields;
-  const heads = [['Topic', 'c-topic'], ['Current activity', 'c-act'], ['Due', 'c-due'], ['Status', 'c-st']]
-    .concat(F.map((f) => [f.name, 'c-x']), [['Status update & support needed', 'c-upd']]);
-  const rows = list.map((it) => {
-    const st = statusById(it.status), w = wsById(it.ws);
-    const upd = h('td', { class: 'tb-u', dir: 'auto' },
-      it.update ? h('div', { text: it.update }) : null,
-      it.challenge ? h('div', { class: 'tb-ch' }, h('b', { text: 'Support needed: ' }), it.challenge) : null,
-      it.decision.needed ? h('div', { class: 'tb-dc' }, dtag(it), it.decision.text ? ' ' + it.decision.text : '') : null);
-    if (!upd.childNodes.length) upd.append(dash());
-    return h('tr', { class: 'tb-r', id: 'it-' + it.id, 'data-ws': it.ws, vars: { '--c': st.color } },
-      h('td', { class: 'tb-t' },
+  for (const f of state.config.fields) {
+    if (it.custom[f.id]) facts.push(h('span', { class: 'tc-f' }, h('span', { class: 'tc-k', text: f.name }), h('b', { dir: 'auto', text: f.type === 'date' ? fmtDate(it.custom[f.id]) : it.custom[f.id] })));
+  }
+  if (facts.length) lines.push(h('div', { class: 'tc-facts' }, facts));
+  if (it.update) lines.push(line('Update', it.update));
+  if (it.challenge) lines.push(h('div', { class: 'tc-l tc-ch' }, h('span', { class: 'tc-k', text: 'Support needed' }), h('span', { class: 'tc-v', dir: 'auto', text: it.challenge })));
+  if (it.decision.needed) lines.push(line('Decision', dtag(it, true), it.decision.text ? ' ' + it.decision.text : ''));
+  return h('article', { class: 'tcard' + (done ? ' done' : ''), id: 'it-' + it.id, 'data-ws': it.ws, vars: { '--c': st.color } },
+    h('div', { class: 'tc-h' },
+      h('div', { class: 'tc-name' },
         h('i', { dir: 'auto', text: w ? (w.group ? w.group + ': ' : '') + w.name : '' }),
-        it.title ? h('b', { dir: 'auto', text: it.title }) : null,
-        ui.edit ? h('div', { class: 'tb-btns' }, btn('Edit', () => openItem(it.id), 'small'),
-          !done && doneStatus() ? btn('Mark done', () => markDone(it), 'small') : null) : null),
-      h('td', { class: 'tb-a', dir: 'auto' }, it.nextStep ? it.nextStep : dash()),
-      dueCell(it, done),
-      h('td', { class: 'tb-s' }, pill(st)),
-      F.map((f) => h('td', { class: 'tb-x', dir: 'auto' }, it.custom[f.id] ? (f.type === 'date' ? fmtDate(it.custom[f.id]) : it.custom[f.id]) : dash())),
-      upd);
-  });
-  return h('table', { class: 'tb' },
-    h('thead', {}, h('tr', {}, heads.map((x) => h('th', { scope: 'col', class: x[1], text: x[0] })))),
-    h('tbody', {}, rows));
+        it.title ? h('b', { dir: 'auto', text: it.title }) : null),
+      h('div', { class: 'tc-side' }, pill(st),
+        ui.edit ? h('div', { class: 'tc-btns' }, btn('Edit', () => openItem(it.id), 'small'),
+          !done && doneStatus() ? btn('Mark done', () => markDone(it), 'small') : null) : null)),
+    lines);
 }
 
 // Each topic can put two dates on the calendar: the action date and the target date.
@@ -1101,9 +1090,9 @@ function topicsSection() {
     if (it.targetDate && it.targetDate !== it.nextDate) events.push({ it, date: it.targetDate, target: true });
   }
   const sec = h('section', { class: 'sec', id: 'next' }, h('h2', { text: 'Topics' }));
-  sec.append(h('div', { class: 'panel rm' }, act.length ? topicTable(act, false) : h('p', { class: 'hint', style: 'margin:0;padding:16px 20px', text: 'No open topics.' })));
+  sec.append(act.length ? h('div', { class: 'cards' }, act.map((it) => topicCard(it, false))) : h('div', { class: 'panel' }, h('p', { class: 'hint', style: 'margin:0;padding:16px 20px', text: 'No open topics.' })));
   if (dn.length) {
-    const d = h('details', { class: 'sec-done' }, h('summary', { text: 'Done (' + dn.length + ')' }), h('div', { class: 'panel rm' }, topicTable(dn, true)));
+    const d = h('details', { class: 'sec-done' }, h('summary', { text: 'Done (' + dn.length + ')' }), h('div', { class: 'cards' }, dn.map((it) => topicCard(it, true))));
     track(d, 'done');
     sec.append(d);
   }
