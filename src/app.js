@@ -846,11 +846,6 @@ function segBar(counts, tall, label) {
 function legend(counts) {
   return h('ul', { class: 'legend' }, counts.filter((c) => c.n).map((c) => h('li', {}, icon(c.s), c.s.label)));
 }
-function countText(items) {
-  const att = items.filter((i) => isActive(i) && ['risk', 'blocked'].includes(kindOf(i))).length;
-  if (!items.length) return h('span', { class: 'ws-count', text: 'No topics' });
-  return h('span', { class: 'ws-count', text: topics(items.length) + (att ? ', ' + att + ' need attention' : '') });
-}
 function readLogo(file, done) {
   if (!file) return;
   if (file.size > 300 * 1024) { toast('The logo must be under 300 KB.'); return; }
@@ -973,10 +968,7 @@ function renderPage() {
   const frag = document.createDocumentFragment();
   if (state.items.length) frag.append(overviewPanel());
   else frag.append(h('div', { class: 'empty', text: 'No topics yet. Click Edit at the top, then add your first topic under any workstream.' }));
-  if (state.items.length) frag.append(boardSection());
-  if (state.items.length) { const nx = nextSection(); if (nx) frag.append(nx); frag.append(challengesSection()); }
-  frag.append(h('h2', { class: 'part', text: 'Topics' }));
-  for (const g of workstreamSections()) frag.append(g);
+  if (state.items.length) { frag.append(boardSection()); frag.append(topicsSection()); }
   $('#page').replaceChildren(frag);
 }
 
@@ -997,7 +989,7 @@ function boardRow(ws) {
   const nx = nexts[0];
   const late = nx && diffDays(TODAY, nx) < 0;
   const att = act.filter((i) => ['risk', 'blocked'].includes(kindOf(i))).length;
-  const a = h('a', { class: 'brow', href: '#ws-' + ws.id, onclick: (e) => { e.preventDefault(); const el = document.getElementById('ws-' + ws.id); if (el) el.scrollIntoView({ block: 'start' }); } },
+  const a = h('a', { class: 'brow', href: '#ws-' + ws.id, onclick: (e) => { e.preventDefault(); const el = document.querySelector('tr[data-ws="' + CSS.escape(ws.id) + '"]'); if (el) flashTo(el); } },
     icon(st),
     h('span', { class: 'nm', dir: 'auto', text: ws.name }),
     segBar(countsFor(items), false, ws.name),
@@ -1050,188 +1042,76 @@ function calendar(events) {
     h('div', { class: 'cal-g' }, cells));
 }
 
+// One table with everything about every topic, visible without opening anything.
+const wsIndex = (it) => state.config.workstreams.findIndex((w) => w.id === it.ws);
+const ordered = (list) => list.slice().sort((a, b) => (wsIndex(a) - wsIndex(b)) || ((a.nextDate || '9999') < (b.nextDate || '9999') ? -1 : (a.nextDate || '9999') > (b.nextDate || '9999') ? 1 : 0));
+const dash = () => h('span', { class: 'at-none', text: '-' });
+function dueCell(it, done) {
+  const td = h('td', { class: 'tb-d' });
+  if (it.nextDate) {
+    const t = new Date(parseISO(it.nextDate));
+    td.append(h('b', { text: t.getUTCDate() + ' ' + MONTHS[t.getUTCMonth()] + (t.getUTCFullYear() !== new Date().getFullYear() ? ' ' + t.getUTCFullYear() : '') }));
+    if (!done) {
+      const n = diffDays(TODAY, it.nextDate);
+      td.append(h('em', { class: n < 0 ? 'late' : '', text: n < 0 ? 'Overdue ' + days(-n) : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : 'In ' + days(n) }));
+    }
+  }
+  if (it.targetDate) {
+    const late = !done && diffDays(TODAY, it.targetDate) < 0;
+    td.append(h('small', { class: 'tb-tg' + (late ? ' late' : ''), text: 'Target ' + fmtDate(it.targetDate) }));
+  }
+  if (!td.childNodes.length) td.append(dash());
+  return td;
+}
+function topicTable(list, done) {
+  const F = state.config.fields;
+  const heads = [['Topic', 'c-topic'], ['Current activity', 'c-act'], ['Due', 'c-due'], ['Status', 'c-st']]
+    .concat(F.map((f) => [f.name, 'c-x']), [['Status update & support needed', 'c-upd']]);
+  const rows = list.map((it) => {
+    const st = statusById(it.status), w = wsById(it.ws);
+    const upd = h('td', { class: 'tb-u', dir: 'auto' },
+      it.update ? h('div', { text: it.update }) : null,
+      it.challenge ? h('div', { class: 'tb-ch' }, h('b', { text: 'Support needed: ' }), it.challenge) : null,
+      it.decision.needed ? h('div', { class: 'tb-dc' }, dtag(it), it.decision.text ? ' ' + it.decision.text : '') : null);
+    if (!upd.childNodes.length) upd.append(dash());
+    return h('tr', { class: 'tb-r', id: 'it-' + it.id, 'data-ws': it.ws, vars: { '--c': st.color } },
+      h('td', { class: 'tb-t' },
+        h('i', { dir: 'auto', text: w ? (w.group ? w.group + ': ' : '') + w.name : '' }),
+        it.title ? h('b', { dir: 'auto', text: it.title }) : null,
+        ui.edit ? h('div', { class: 'tb-btns' }, btn('Edit', () => openItem(it.id), 'small'),
+          !done && doneStatus() ? btn('Mark done', () => markDone(it), 'small') : null) : null),
+      h('td', { class: 'tb-a', dir: 'auto' }, it.nextStep ? it.nextStep : dash()),
+      dueCell(it, done),
+      h('td', { class: 'tb-s' }, pill(st)),
+      F.map((f) => h('td', { class: 'tb-x', dir: 'auto' }, it.custom[f.id] ? (f.type === 'date' ? fmtDate(it.custom[f.id]) : it.custom[f.id]) : dash())),
+      upd);
+  });
+  return h('table', { class: 'tb' },
+    h('thead', {}, h('tr', {}, heads.map((x) => h('th', { scope: 'col', class: x[1], text: x[0] })))),
+    h('tbody', {}, rows));
+}
+
 // Each topic can put two dates on the calendar: the action date and the target date.
-function nextSection() {
-  const act = state.items.filter(isActive);
+function topicsSection() {
+  const act = ordered(state.items.filter(isActive));
+  const dn = ordered(state.items.filter((i) => !isActive(i)));
   const events = [];
   for (const it of act) {
     if (it.nextDate) events.push({ it, date: it.nextDate, target: false });
     if (it.targetDate && it.targetDate !== it.nextDate) events.push({ it, date: it.targetDate, target: true });
   }
-  events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  if (!events.length) return null;
-  const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  // One row per topic, sorted by its first date. The target date is shown inside the date cell.
-  const topicsDated = act.filter((it) => it.nextDate || it.targetDate)
-    .sort((a, b) => ((a.nextDate || a.targetDate) < (b.nextDate || b.targetDate) ? -1 : (a.nextDate || a.targetDate) > (b.nextDate || b.targetDate) ? 1 : 0));
-  const rows = topicsDated.map((it) => {
-    const st = statusById(it.status), w = wsById(it.ws);
-    const main = it.nextDate || it.targetDate;
-    const n = diffDays(TODAY, main);
-    const t = new Date(parseISO(main));
-    const rel = n < 0 ? 'Overdue ' + days(-n) : n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : 'In ' + days(n);
-    const tgLate = it.targetDate && diffDays(TODAY, it.targetDate) < 0;
-    return h('tr', { class: 'at-r' + (n < 0 ? ' late' : ''), vars: { '--c': st.color }, tabindex: '0', onclick: () => jumpTo(it.id),
-      onkeydown: (ev2) => { if (ev2.key === 'Enter') jumpTo(it.id); } },
-      h('td', { class: 'at-d' }, h('b', { text: t.getUTCDate() + ' ' + MONTHS[t.getUTCMonth()] + (t.getUTCFullYear() !== new Date().getFullYear() ? ' ' + t.getUTCFullYear() : '') }),
-        h('span', { text: ' ' + WD[t.getUTCDay()] }), h('em', { text: rel }),
-        it.nextDate && it.targetDate ? h('small', { class: 'at-tg' + (tgLate ? ' late' : ''), text: 'Target ' + fmtDate(it.targetDate) })
-          : !it.nextDate ? h('small', { class: 'at-tg' + (tgLate ? ' late' : ''), text: 'Target date' }) : null),
-      h('td', { class: 'at-t' }, h('i', { dir: 'auto', text: w ? (w.group ? w.group + ': ' : '') + w.name : '' }), it.title ? h('b', { dir: 'auto', text: it.title }) : null,
-        ...extras(it).map((x) => h('small', { class: 'at-x2', dir: 'auto', text: x }))),
-      h('td', { class: 'at-a', dir: 'auto' }, it.nextStep ? it.nextStep : h('span', { class: 'at-none', text: '-' })),
-      h('td', { class: 'at-s' }, pill(st)),
-      h('td', { class: 'at-x' }, it.decision.needed ? dtag(it, true) : h('span', { class: 'at-none', text: '-' })),
-      h('td', { class: 'at-c', dir: 'auto' }, it.challenge ? it.challenge : h('span', { class: 'at-none', text: '-' })));
-  });
-  const miss = act.filter((it) => !it.nextDate && !it.targetDate).length;
-  return h('section', { class: 'sec', id: 'next' },
-    h('h2', { text: 'Actions required' }),
-    h('div', { class: 'panel cal-p' }, calendar(events),
-      h('p', { class: 'cal-key' }, h('i'), ' Action date', h('i', { class: 'tg' }), ' Target date')),
-    h('div', { class: 'panel rm' },
-      h('table', { class: 'at' },
-        h('thead', {}, h('tr', {}, ['Date', 'Topic', 'Action required', 'Status', 'Decision from', 'Challenge'].map((x) => h('th', { scope: 'col', text: x })))),
-        h('tbody', {}, rows)),
-      miss ? h('p', { class: 'chart-note', text: miss + (miss === 1 ? ' topic has' : ' topics have') + ' no date yet, so ' + (miss === 1 ? 'it is' : 'they are') + ' not shown here.' }) : null));
-}
-
-function challengesSection() {
-  const dec = sortItems(state.items.filter((i) => isActive(i) && i.decision.needed));
-  const risk = sortItems(state.items.filter((i) => isActive(i) && (['risk', 'blocked'].includes(kindOf(i)) || overdueDays(i) > 0 || targetPassed(i))));
-  const sec = h('section', { class: 'sec', id: 'challenges' },
-    h('h2', {}, 'Challenges and support needed'),
-    null);
-  if (!dec.length && !risk.length) {
-    sec.append(h('div', { class: 'panel decisions' }, h('p', { class: 'hint', style: 'margin:0', text: 'Nothing is blocked, late, or waiting for a decision right now.' })));
-    return sec;
+  const sec = h('section', { class: 'sec', id: 'next' }, h('h2', { text: 'Topics' }));
+  sec.append(h('div', { class: 'panel rm' }, act.length ? topicTable(act, false) : h('p', { class: 'hint', style: 'margin:0;padding:16px 20px', text: 'No open topics.' })));
+  if (dn.length) {
+    const d = h('details', { class: 'sec-done' }, h('summary', { text: 'Done (' + dn.length + ')' }), h('div', { class: 'panel rm' }, topicTable(dn, true)));
+    track(d, 'done');
+    sec.append(d);
   }
-  const jump = (id) => (e) => { e.preventDefault(); jumpTo(id); };
-  if (dec.length) {
-    sec.append(h('h3', { class: 'sub-h' }, 'Decisions needed', h('span', { class: 'cnt', text: String(dec.length) })),
-      h('div', { class: 'panel decisions' }, h('ul', { class: 'dec-list' }, dec.map((it) => {
-        const w = wsById(it.ws);
-        return h('li', {}, icon(it.status), h('div', {},
-          h('div', { class: 'd-title' }, h('a', { href: '#it-' + it.id, dir: 'auto', onclick: jump(it.id), text: ttl(it) })),
-          it.decision.text ? h('div', { class: 'd-text', dir: 'auto', text: it.decision.text }) : null,
-          h('div', { class: 'd-meta' }, dtag(it), w ? ' ' + w.name : '')));
-      }))));
-  }
-  if (risk.length) {
-    sec.append(h('h3', { class: 'sub-h' }, 'Blocked, at risk or late', h('span', { class: 'cnt', text: String(risk.length) })),
-      h('div', { class: 'panel decisions' }, h('ul', { class: 'dec-list' }, risk.map((it) => {
-        const w = wsById(it.ws);
-        const od = overdueDays(it);
-        const flags = [];
-        if (od) flags.push('Overdue by ' + days(od)); else if (targetPassed(it)) flags.push('Past target date');
-        return h('li', {}, icon(it.status), h('div', {},
-          h('div', { class: 'd-title' }, h('a', { href: '#it-' + it.id, dir: 'auto', onclick: jump(it.id), text: ttl(it) })),
-          (it.challenge || it.update) ? h('div', { class: 'd-text', dir: 'auto', text: it.challenge || it.update }) : null,
-          h('div', { class: 'd-meta', text: [w ? w.name : '', statusById(it.status).label].concat(flags).filter(Boolean).join(', ') })));
-      }))));
+  if (events.length) {
+    sec.append(h('div', { class: 'panel cal-p', style: 'margin-top:20px' }, calendar(events),
+      h('p', { class: 'cal-key' }, h('i'), ' Action date', h('i', { class: 'tg' }), ' Target date')));
   }
   return sec;
-}
-
-function workstreamSections() {
-  const out = [];
-  const seen = new Set();
-  const all = state.config.workstreams;
-  for (const ws of all) {
-    if (ws.group) {
-      if (seen.has(ws.group)) continue;
-      seen.add(ws.group);
-      const members = all.filter((w) => w.group === ws.group);
-      const ids = new Set(members.map((m) => m.id));
-      const gi = state.items.filter((i) => ids.has(i.ws));
-      const g = h('section', { class: 'group' },
-        h('div', { class: 'gt' }, h('h2', { text: ws.group, dir: 'auto' }), segBar(countsFor(gi), false, ws.group), countText(gi)));
-      for (const m of members) g.append(wsBlock(m, 3));
-      out.push(g);
-    } else {
-      out.push(h('section', { class: 'group' }, wsBlock(ws, 2)));
-    }
-  }
-  return out;
-}
-
-function wsBlock(ws, level) {
-  const items = state.items.filter((i) => i.ws === ws.id);
-  const el = h('div', { class: 'panel ws', id: 'ws-' + ws.id });
-  const top = h('div', { class: 'ws-top' },
-    h('div', { class: 'ws-head' }, h('h' + level, { text: ws.name, dir: 'auto' }), segBar(countsFor(items), false, ws.name), countText(items)));
-  if (ui.edit) {
-    const mk = (label, key) => {
-      const ta = h('textarea', { class: 'in', rows: 2, dir: 'auto', value: ws[key] });
-      ta.addEventListener('input', () => quietSet(() => { ws[key] = ta.value; }));
-      return h('label', {}, label, ta);
-    };
-    top.append(h('div', { class: 'ws-edit edit-only' }, mk('Where we are (one or two lines for the GM)', 'summary'), mk('Action required', 'outlook')));
-  } else if (ws.summary || ws.outlook) {
-    top.append(h('div', { class: 'ws-notes' },
-      ws.summary ? h('p', { dir: 'auto' }, h('b', { text: 'Where we are: ' }), ws.summary) : null,
-      ws.outlook ? h('p', { dir: 'auto' }, h('b', { text: 'Action required: ' }), ws.outlook) : null));
-  }
-  el.append(top);
-  const act = sortItems(items.filter(isActive));
-  const dn = items.filter((i) => !isActive(i)).sort((a, b) => ((b.updateDate || '') > (a.updateDate || '') ? 1 : -1));
-  if (act.length) el.append(h('div', { class: 'items' }, act.map(itemRow)));
-  if (dn.length) {
-    const d = h('details', { class: 'done-list' }, h('summary', { text: 'Done (' + dn.length + ')' }), h('div', { class: 'items' }, dn.map(itemRow)));
-    track(d, 'done-' + ws.id);
-    el.append(d);
-  }
-  if (ui.edit) el.append(h('div', { class: 'ws-tools edit-only' }, btn('Add topic to ' + ws.name, () => openItem(null, ws.id), 'small')));
-  return el;
-}
-
-function field(label, node) {
-  if (node == null || node === '') return null;
-  return h('div', { class: 'f' }, h('div', { class: 'k', text: label }), h('div', { class: 'v', dir: 'auto' }, node));
-}
-
-function itemRow(it) {
-  const st = statusById(it.status);
-  const od = overdueDays(it), tp = targetPassed(it);
-  const d = h('details', { class: 'item', id: 'it-' + it.id, vars: { '--c': st.color } });
-  track(d, it.id);
-
-  const l1 = h('div', { class: 'it-l1' },
-    h('span', { class: 'it-title', dir: 'auto', text: ttl(it) }),
-    h('span', { style: 'display:inline-flex;gap:8px;align-items:center' }, pill(st),
-      ui.edit && isActive(it) && doneStatus() ? btn('Mark done', (e) => { e.preventDefault(); e.stopPropagation(); markDone(it); }, 'small edit-only') : null,
-      ui.edit ? btn('Edit', (e) => { e.preventDefault(); e.stopPropagation(); openItem(it.id); }, 'small edit-only') : null));
-  const main = h('div', { class: 'it-main' }, l1);
-  if (it.update) main.append(h('div', { class: 'it-upd', dir: 'auto', text: it.update }));
-
-  const meta = h('div', { class: 'it-meta' });
-  if (it.nextStep || it.nextDate) {
-    meta.append(h('span', { dir: 'auto' }, h('b', { text: 'Action required: ' }), (it.nextStep || '') + (it.nextDate ? (it.nextStep ? ', ' : '') + fmtDate(it.nextDate) : '')));
-  }
-  if (od) meta.append(h('span', { class: 'flag crit', text: 'Overdue by ' + days(od) }));
-  if (!od && tp) meta.append(h('span', { class: 'flag crit', text: 'Past target date' }));
-  for (const x of extras(it)) meta.append(h('span', { dir: 'auto', text: x }));
-  if (isActive(it) && it.decision.needed) meta.append(dtag(it));
-  if (meta.childNodes.length) main.append(meta);
-
-  d.append(h('summary', {}, main));
-
-  const w = wsById(it.ws);
-  const body = h('div', { class: 'it-body' },
-    field('Where we are', it.update ? it.update + (it.updateDate ? ' (' + fmtDate(it.updateDate) + ')' : '') : ''),
-    field('Action required', (it.nextStep || '') + (it.nextDate ? (it.nextStep ? ', ' : '') + fmtDate(it.nextDate) : '')),
-    field('Target date', it.targetDate ? fmtDate(it.targetDate) : ''),
-    field('Challenge', it.challenge),
-    field('Decision needed', it.decision.needed ? (it.decision.text || 'Decision required') + (it.decision.by ? ' (' + it.decision.by + ')' : '') : ''),
-    ...state.config.fields.map((f) => field(f.name, it.custom[f.id] ? (f.type === 'date' ? fmtDate(it.custom[f.id]) : it.custom[f.id]) : '')),
-    );
-  if (it.history.length) {
-    const hs = it.history.slice().sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 6);
-    body.append(h('div', { class: 'f' }, h('div', { class: 'k', text: 'History' }),
-      h('ul', { class: 'hist' }, hs.map((e) => h('li', { dir: 'auto' }, h('b', { text: fmtDate(e.date) }), ' ' + (e.status ? statusById(e.status).label : '') + (e.text ? ': ' + e.text : ''))))));
-  }
-  d.append(body);
-  return d;
 }
 
 const doneStatus = () => state.config.statuses.find((x) => x.kind === 'done');
@@ -1246,14 +1126,17 @@ function markDone(it) {
   toast('Marked as done. It moved to the Done list under its workstream.');
 }
 
+function flashTo(el) {
+  el.scrollIntoView({ block: 'center' });
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 1600);
+}
 function jumpTo(id) {
-  ui.open.add(id);
-  render();
   const el = document.getElementById('it-' + id);
   if (!el) return;
-  const dl = el.closest('details.done-list');
+  const dl = el.closest('details.sec-done');
   if (dl) { dl.open = true; ui.open.add(dl.dataset.key); }
-  el.scrollIntoView({ block: 'center' });
+  flashTo(el);
 }
 
 /* =====================================================================
